@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ConnectWallet } from "@/components/wallet/ConnectWallet";
 import { 
   Home, 
   Search, 
@@ -52,13 +53,6 @@ const mainNavItems: NavItem[] = [
 export function GlobalNavbar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false);
-  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
-
-  // Mock wallet data
-  const suiBalance = 25.50;
-  const walletAddress = "0x1234...5678";
-  const isWalletConnected = true;
 
   // Don't show navbar on active session pages
   if (pathname.includes("/session/") && !pathname.includes("lobby")) {
@@ -108,87 +102,7 @@ export function GlobalNavbar() {
 
           {/* Right Side Menu */}
           <div className="hidden md:flex items-center space-x-4">
-            {/* Wallet Dropdown */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 border-glow hover:glow-green transition-all duration-200"
-                onClick={() => setIsWalletDropdownOpen(!isWalletDropdownOpen)}
-              >
-                <Wallet className="w-4 h-4 text-green-400" />
-                <span className="text-green-400 font-mono">{suiBalance.toFixed(2)} SUI</span>
-                <ChevronDown className="w-3 h-3" />
-              </Button>
-
-              {isWalletDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 glass rounded-lg shadow-lg border border-border p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Wallet Balance</span>
-                    <Badge variant="outline" className="text-green-400 border-green-400/30">
-                      Connected
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="text-2xl font-bold text-green-400 font-mono">
-                      {suiBalance.toFixed(2)} SUI
-                    </div>
-                    <div className="text-xs text-muted-foreground font-mono">
-                      {walletAddress}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-2 border-t border-border">
-                    <Button size="sm" variant="outline" className="flex-1">
-                      Add Funds
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex-1">
-                      Send
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* User Dropdown */}
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="flex items-center gap-2 border-glow hover:glow-blue transition-all duration-200"
-                onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-              >
-                <User className="w-4 h-4" />
-                <ChevronDown className="w-3 h-3" />
-              </Button>
-
-              {isUserDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 glass rounded-lg shadow-lg border border-border p-2 space-y-1">
-                  <Link href="/client/client-1" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors">
-                    <User className="w-4 h-4" />
-                    <span>My Profile</span>
-                  </Link>
-                  
-                  <Link href="/settings" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors">
-                    <Settings className="w-4 h-4" />
-                    <span>Settings</span>
-                  </Link>
-                  
-                  <Link href="/help" className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors">
-                    <HelpCircle className="w-4 h-4" />
-                    <span>Help & Support</span>
-                  </Link>
-                  
-                  <hr className="border-border my-2" />
-                  
-                  <button className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors text-red-400 w-full text-left">
-                    <LogOut className="w-4 h-4" />
-                    <span>Disconnect</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <ConnectWallet />
           </div>
 
           {/* Mobile menu button */}
@@ -228,11 +142,10 @@ export function GlobalNavbar() {
                 );
               })}
               
-              {/* Mobile Wallet Info */}
+              {/* Mobile Connect Wallet */}
               <div className="pt-4 border-t border-border">
                 <div className="px-3 py-2">
-                  <div className="text-sm text-muted-foreground">Wallet Balance</div>
-                  <div className="text-lg font-mono text-green-400">{suiBalance.toFixed(2)} SUI</div>
+                  <ConnectWallet />
                 </div>
               </div>
             </div>
@@ -240,16 +153,7 @@ export function GlobalNavbar() {
         )}
       </div>
 
-      {/* Click outside to close dropdowns */}
-      {(isWalletDropdownOpen || isUserDropdownOpen) && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => {
-            setIsWalletDropdownOpen(false);
-            setIsUserDropdownOpen(false);
-          }}
-        />
-      )}
+
     </nav>
   );
 }
