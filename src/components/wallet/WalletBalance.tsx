@@ -7,9 +7,11 @@ import { Card } from '../ui/card';
 export interface WalletBalanceProps {
   address?: string;
   balance?: string;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
-export default function WalletBalance({ address, balance }: WalletBalanceProps) {
+export default function WalletBalance({ address, balance, isLoading = false, error }: WalletBalanceProps) {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -45,8 +47,14 @@ export default function WalletBalance({ address, balance }: WalletBalanceProps) 
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-500">Balance</span>
-          <span className="font-medium text-green-400">
-            {balance || '0.00'} SUI
+          <span className="font-medium">
+            {isLoading ? (
+              <span className="animate-pulse text-yellow-400">Loading...</span>
+            ) : error ? (
+              <span className="text-red-400 text-xs">Error</span>
+            ) : (
+              <span className="text-green-400">{`${balance || '0.0000'} SUI`}</span>
+            )}
           </span>
         </div>
       </div>

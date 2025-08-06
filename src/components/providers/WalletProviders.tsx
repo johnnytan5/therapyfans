@@ -9,7 +9,7 @@ import { RegisterEnokiWallet } from '@/components/register/RegisterEnokiWallet';
 const { networkConfig } = createNetworkConfig({
 	localnet: { url: getFullnodeUrl('localnet') },
 	mainnet: { url: getFullnodeUrl('mainnet') },
-	testnet: { url: getFullnodeUrl('testnet') },
+	devnet: { url: getFullnodeUrl('devnet') },
 });
 
 const queryClient = new QueryClient();
@@ -21,7 +21,7 @@ interface WalletProvidersProps {
 export function WalletProviders({ children }: WalletProvidersProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
+			<SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
 				<RegisterEnokiWallet />
 				<WalletProvider>
 					{children}

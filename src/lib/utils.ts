@@ -33,6 +33,23 @@ export function formatDuration(minutes: number): string {
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
+// Convert MIST to SUI (1 SUI = 1,000,000,000 MIST)
+export function mistToSui(mistAmount: string | number): number {
+  const mist = typeof mistAmount === 'string' ? parseInt(mistAmount) : mistAmount;
+  return mist / 1_000_000_000;
+}
+
+// Convert SUI to MIST
+export function suiToMist(suiAmount: number): number {
+  return Math.floor(suiAmount * 1_000_000_000);
+}
+
+// Format SUI amount from MIST
+export function formatSuiFromMist(mistAmount: string | number, decimals: number = 4): string {
+  const suiAmount = mistToSui(mistAmount);
+  return `${suiAmount.toFixed(decimals)} SUI`;
+}
+
 // Format SUI amount
 export function formatSui(amount: number): string {
   return `${amount.toFixed(2)} SUI`;

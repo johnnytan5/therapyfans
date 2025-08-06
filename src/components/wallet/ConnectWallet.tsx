@@ -15,32 +15,68 @@ import {
   Settings,
   HelpCircle
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, mistToSui } from '@/lib/utils';
 
 export function ConnectWallet() {
   const currentAccount = useCurrentAccount();
   const { mutate: connect } = useConnectWallet();
   const { mutate: disconnect } = useDisconnectWallet();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [balance, setBalance] = useState('0.00');
+  const [balance, setBalance] = useState('0.0000');
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
   const suiClient = useSuiClient();
 
   useEffect(() => {
-    async function getBalance() {
-      if (currentAccount) {
-        try {
-          const { totalBalance } = await suiClient.getBalance({
-            owner: currentAccount.address,
-          });
-          setBalance(totalBalance);
-        } catch (error) {
-          console.error('Failed to fetch balance:', error);
-          setBalance('0.00');
+    async function getBalance(retryCount = 0) {
+      if (!currentAccount) {
+        setBalance('0.0000');
+        setIsLoadingBalance(false);
+        setBalanceError(null);
+        return;
+      }
+
+      setIsLoadingBalance(true);
+      setBalanceError(null);
+      
+      try {
+        const { totalBalance } = await suiClient.getBalance({
+          owner: currentAccount.address,
+        });
+        // Convert from MIST to SUI using utility function
+        const suiBalance = mistToSui(totalBalance).toFixed(4);
+        setBalance(suiBalance);
+        setBalanceError(null);
+      } catch (error) {
+        console.error('Failed to fetch balance:', error);
+        
+        // Retry logic: retry up to 3 times with exponential backoff
+        if (retryCount < 3) {
+          const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+          setTimeout(() => getBalance(retryCount + 1), delay);
+          return;
         }
+        
+        setBalance('0.0000');
+        setBalanceError('Failed to fetch balance');
+      } finally {
+        setIsLoadingBalance(false);
       }
     }
     
     getBalance();
+    
+    // Set up interval to refresh balance every 10 seconds when connected
+    let intervalId: NodeJS.Timeout;
+    if (currentAccount) {
+      intervalId = setInterval(() => getBalance(), 10000);
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [currentAccount, suiClient]);
 
   const wallets = useWallets().filter(isEnokiWallet);
@@ -77,6 +113,8 @@ export function ConnectWallet() {
                 <WalletBalance 
                   address={currentAccount.address}
                   balance={balance}
+                  isLoading={isLoadingBalance}
+                  error={balanceError}
                 />
               </div>
               
