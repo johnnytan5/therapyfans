@@ -4,18 +4,20 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VibeTag } from "./VibeTag";
-import { TherapistWithProfile } from "@/types";
+import { TherapistWithRating } from "@/lib/therapistService";
 import { Star, Shield, Clock } from "lucide-react";
 import { createBlurredAvatar, formatSui } from "@/lib/utils";
+import { getDisplayName, formatPrice } from "@/lib/therapistService";
 
 interface TherapistCardProps {
-  therapist: TherapistWithProfile;
+  therapist: TherapistWithRating;
   onBookSession?: () => void;
   compact?: boolean;
 }
 
 export function TherapistCard({ therapist, onBookSession, compact = false }: TherapistCardProps) {
-  const { alias, profile } = therapist;
+  const displayName = getDisplayName(therapist.full_name);
+  const price = formatPrice(therapist.price_per_session);
   
   return (
     <Card className="group hover:shadow-lg transition-all duration-300 border-0 glass border-glow hover:glow-purple scale-in">
@@ -36,8 +38,8 @@ export function TherapistCard({ therapist, onBookSession, compact = false }: The
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-lg truncate">{alias}</h3>
-              {profile.verified && (
+              <h3 className="font-semibold text-lg truncate">{displayName}</h3>
+              {therapist.is_verified && (
                 <Badge variant="verified" className="gap-1">
                   <Shield className="w-3 h-3" />
                   Verified
@@ -48,7 +50,7 @@ export function TherapistCard({ therapist, onBookSession, compact = false }: The
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="font-medium">{profile.rating}</span>
+                <span className="font-medium">{therapist.rating || 0}</span>
               </div>
               <span>•</span>
               <div className="flex items-center gap-1">
@@ -61,38 +63,40 @@ export function TherapistCard({ therapist, onBookSession, compact = false }: The
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {!compact && (
+        {!compact && therapist.bio && (
           <p className="text-sm text-muted-foreground line-clamp-2">
-            {profile.bio}
+            {therapist.bio}
           </p>
         )}
         
         {/* Specializations */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Specializations
-          </h4>
-          <div className="flex flex-wrap gap-1">
-            {profile.specializations.slice(0, compact ? 2 : 4).map((spec) => (
-              <VibeTag key={spec} tag={spec} variant="outline" />
-            ))}
-            {profile.specializations.length > (compact ? 2 : 4) && (
-              <Badge variant="outline" className="text-xs">
-                +{profile.specializations.length - (compact ? 2 : 4)} more
-              </Badge>
-            )}
-          </div>
-        </div>
-        
-        {/* Vibe Tags */}
-        {therapist.tags.length > 0 && (
+        {therapist.therapy_styles && therapist.therapy_styles.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Therapy Style
+              Specializations
             </h4>
             <div className="flex flex-wrap gap-1">
-              {therapist.tags.slice(0, 3).map((tag) => (
-                <VibeTag key={tag.id} tag={tag.name} />
+              {therapist.therapy_styles.slice(0, compact ? 2 : 4).map((style) => (
+                <VibeTag key={style} tag={style} variant="outline" />
+              ))}
+              {therapist.therapy_styles.length > (compact ? 2 : 4) && (
+                <Badge variant="outline" className="text-xs">
+                  +{therapist.therapy_styles.length - (compact ? 2 : 4)} more
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Languages */}
+        {therapist.languages_spoken && therapist.languages_spoken.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Languages
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {therapist.languages_spoken.slice(0, 3).map((language) => (
+                <VibeTag key={language} tag={language} />
               ))}
             </div>
           </div>
@@ -103,7 +107,7 @@ export function TherapistCard({ therapist, onBookSession, compact = false }: The
           <div className="flex items-center justify-between">
             <div className="text-sm">
               <span className="text-muted-foreground">Starting at </span>
-              <span className="font-semibold text-lg">{formatSui(5)}</span>
+              <span className="font-semibold text-lg">{formatSui(parseFloat(price))}</span>
             </div>
             <Button 
               onClick={onBookSession}
