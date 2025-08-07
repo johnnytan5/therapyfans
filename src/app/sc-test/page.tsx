@@ -6,7 +6,7 @@ import {
   useSignAndExecuteTransaction,
   useSuiClient
 } from "@mysten/dapp-kit";
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { Transaction } from "@mysten/sui/transactions";
 import { SuiClient } from "@mysten/sui.js/client";
 import { ConnectWallet } from "@/components/wallet/ConnectWallet";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,7 @@ const EXPLORER_URL = "https://suiscan.xyz/testnet";
 export default function SmartContractTest() {
   // Updated wallet hooks from dapp-kit
   const account = useCurrentAccount();
-  const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransaction();
-  const suiClient = useSuiClient();
+const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();  const suiClient = useSuiClient();
   // Add this with your other state variables
 const [useSpecificAddress, setUseSpecificAddress] = useState(true);
 const specificWalletAddress = "0x80bb0b336df5b007fbbd97cfdcba38c07d50f4fa29ee5565166ab89fa1414496";
@@ -130,7 +129,7 @@ const createKiosk = async () => {
   startLoading("createKiosk");
   
   try {
-    const tx = new TransactionBlock();
+    const tx = new Transaction();
     if (useSpecificAddress) {
       tx.setSender(specificWalletAddress);
     }
@@ -140,7 +139,7 @@ const createKiosk = async () => {
     
     console.log("Executing create kiosk transaction...");
     
-    const result = await signAndExecuteTransactionBlock({
+    const result = await signAndExecuteTransaction({
       transaction: tx.serialize(),
     });
     
@@ -160,7 +159,7 @@ const createKiosk = async () => {
     startLoading("installExtension");
     
     try {
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::install`,
         arguments: [
@@ -170,7 +169,7 @@ const createKiosk = async () => {
         ],
       });
       
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
   transaction: tx.serialize(),
 
 });
@@ -188,47 +187,78 @@ const mintTherapistNft = async () => {
   startLoading("mintNft");
 
   try {
-    const tx = new TransactionBlock();
+    // Validate input values first
+    const yearsExp = parseInt(nftForm.yearsExperience);
+    const rating = parseInt(nftForm.rating);
+    const totalSessions = parseInt(nftForm.totalSessions);
+
+    // Validation for your specific ranges
+    if (isNaN(yearsExp) || yearsExp < 1 || yearsExp > 50) {
+      setError("Years of experience must be between 1 and 50");
+      endLoading("mintNft");
+      return;
+    }
+
+    if (isNaN(rating) || rating < 0 || rating > 100) {
+      setError("Rating must be between 0 and 100");
+      endLoading("mintNft");
+      return;
+    }
+
+    if (isNaN(totalSessions) || totalSessions < 1 || totalSessions > 100) {
+      setError("Total sessions must be between 1 and 100");
+      endLoading("mintNft");
+      return;
+    }
+
+    console.log("Validated values:", { yearsExp, rating, totalSessions });
+
+    const tx = new Transaction();
     
     console.log("Building mint transaction...");
     
     tx.moveCall({
       target: `${PACKAGE_ID}::therapist_nft::mint`,
       arguments: [
-        tx.pure(nftForm.name),
-        tx.pure(nftForm.specialization),
-        tx.pure(nftForm.credentials),
-        tx.pure(parseInt(nftForm.yearsExperience)),
-        tx.pure(nftForm.bio),
-        tx.pure(nftForm.sessionTypes),
-        tx.pure(nftForm.languages),
-        tx.pure(parseInt(nftForm.rating)),
-        tx.pure(parseInt(nftForm.totalSessions)),
-        tx.pure(nftForm.profileImageUrl),
-        tx.pure(nftForm.certificationUrl)
+        tx.pure.string(nftForm.name),
+        tx.pure.string(nftForm.specialization),
+        tx.pure.string(nftForm.credentials),
+        tx.pure.u8(yearsExp),        // 1-50 fits in u8
+        tx.pure.string(nftForm.bio),
+        tx.pure.string(nftForm.sessionTypes),
+        tx.pure.string(nftForm.languages),
+        tx.pure.u8(rating),          // 0-100 fits in u8
+        tx.pure.u8(totalSessions),   // Changed from u16 to u8 (1-100)
+        tx.pure.string(nftForm.profileImageUrl),
+        tx.pure.string(nftForm.certificationUrl)
       ],
     });
 
-    console.log("transaction", tx); // Log the transaction block
+    console.log("transaction", tx);
     
-    console.log("Transaction built, calling signAndExecute...");
-    console.log("Account address:", account.address);
+    signAndExecuteTransaction(
+      {
+        transaction: tx,
+      },
+      {
+        onSuccess: (result) => {
+          console.log("Transaction successful:", result);
+          handleTxResult(result, "Mint NFT");
+        },
+        onError: (error) => {
+          console.error("Transaction failed:", error);
+          setError(`Error minting NFT: ${error.message}`);
+          endLoading("mintNft");
+        }
+      }
+    );
 
-    // Add more debugging options
-    const result = await signAndExecuteTransactionBlock({
-      transaction: tx.serialize(),
-    });
-    
-    console.log("Transaction executed, result:", result);
-    
-    handleTxResult(result, "Mint NFT");
   } catch (e: any) {
     console.error("Error minting NFT:", e);
     setError(`Error minting NFT: ${e.message}`);
     endLoading("mintNft");
   }
 };
-
   // List a therapist NFT for rental
   const listTherapistService = async (nftId: string, kioskId: string, capId: string) => {
     if (!account) return;
@@ -239,7 +269,7 @@ const mintTherapistNft = async () => {
       // In a real app, you'd fetch this from your backend or a registry
       const mockProtectedTpId = "0x123"; // Replace with actual ID
       
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::list_therapist_service`,
@@ -252,7 +282,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
@@ -272,7 +302,7 @@ const mintTherapistNft = async () => {
       // Mock transfer policy ID
       const mockTransferPolicyId = "0x123"; // Replace with actual ID
       
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::delist_therapist_service`,
@@ -285,7 +315,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
@@ -305,7 +335,7 @@ const mintTherapistNft = async () => {
       // Mock rental policy ID
       const mockRentalPolicyId = "0x123"; // Replace with actual ID
       
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       // Create payment coin (5 SUI = 5,000,000,000 MIST)
       const [coin] = tx.splitCoins(tx.gas, [tx.pure(5000000000)]);
@@ -323,7 +353,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
@@ -343,7 +373,7 @@ const mintTherapistNft = async () => {
       // Mock rental policy ID
       const mockRentalPolicyId = "0x123"; // Replace with actual ID
       
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       // Create payment coin (10 SUI = 10,000,000,000 MIST)
       const [coin] = tx.splitCoins(tx.gas, [tx.pure(10000000000)]);
@@ -361,7 +391,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
@@ -378,7 +408,7 @@ const mintTherapistNft = async () => {
     startLoading("borrowNft");
 
     try {
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::borrow`,
@@ -390,7 +420,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
@@ -407,7 +437,7 @@ const mintTherapistNft = async () => {
     startLoading("startSession");
 
     try {
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::borrow_val`,
@@ -419,7 +449,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
@@ -439,7 +469,7 @@ const mintTherapistNft = async () => {
       // Mock transfer policy ID
       const mockTransferPolicyId = "0x123"; // Replace with actual ID
       
-      const tx = new TransactionBlock();
+      const tx = new Transaction();
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::reclaim`,
@@ -453,7 +483,7 @@ const mintTherapistNft = async () => {
         ],
       });
 
-      const result = await signAndExecuteTransactionBlock({
+      const result = await signAndExecuteTransaction({
         transaction: tx.serialize(), // Convert TransactionBlock to serialized format
       });
       
