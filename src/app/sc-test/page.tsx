@@ -58,7 +58,7 @@ const specificWalletAddress = "0x80bb0b336df5b007fbbd97cfdcba38c07d50f4fa29ee556
     sessionTypes: "Individual, Couples",
     languages: "English, Spanish",
     rating: "95",
-    totalSessions: "324",
+    totalSessions: "2",
     profileImageUrl: "https://example.com/image.jpg",
     certificationUrl: "https://example.com/cert.pdf"
   });
@@ -223,16 +223,18 @@ const mintTherapistNft = async () => {
         tx.pure.string(nftForm.name),
         tx.pure.string(nftForm.specialization),
         tx.pure.string(nftForm.credentials),
-        tx.pure.u8(yearsExp),        // 1-50 fits in u8
+        tx.pure.u64(yearsExp),        
         tx.pure.string(nftForm.bio),
         tx.pure.string(nftForm.sessionTypes),
         tx.pure.string(nftForm.languages),
-        tx.pure.u8(rating),          // 0-100 fits in u8
-        tx.pure.u8(totalSessions),   // Changed from u16 to u8 (1-100)
+        tx.pure.u64(rating),          
+        tx.pure.u64(totalSessions),   
         tx.pure.string(nftForm.profileImageUrl),
         tx.pure.string(nftForm.certificationUrl)
       ],
     });
+
+// TODO: (shawn look here) -> change smart contract to u8 instead u64 (too big)
 
     console.log("transaction", tx);
     
