@@ -80,3 +80,4 @@ jspm_packages/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+.cursor/mcp.json

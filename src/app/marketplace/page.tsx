@@ -1,49 +1,68 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { TherapistCard } from "@/components/therapy/TherapistCard";
 import { VibeTag } from "@/components/therapy/VibeTag";
-import { mockTherapistsWithProfiles, mockTags } from "@/data/mockData";
 import { Search, Filter, Star, Shield, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { getTherapists, TherapistWithRating } from "@/lib/therapistService";
 
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"rating" | "price" | "name">("rating");
   const [minRating, setMinRating] = useState(0);
+  const [therapists, setTherapists] = useState<TherapistWithRating[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch therapists from Supabase
+  useEffect(() => {
+    async function fetchTherapists() {
+      setLoading(true);
+      try {
+        const data = await getTherapists();
+        setTherapists(data);
+      } catch (error) {
+        console.error('Error fetching therapists:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTherapists();
+  }, []);
 
   // Get unique specializations for filtering
   const allSpecializations = useMemo(() => {
     const specs = new Set<string>();
-    mockTherapistsWithProfiles.forEach(therapist => {
-      therapist.profile.specializations.forEach(spec => specs.add(spec));
+    therapists.forEach(therapist => {
+      therapist.therapy_styles.forEach(spec => specs.add(spec));
     });
     return Array.from(specs);
-  }, []);
+  }, [therapists]);
 
   // Filter and sort therapists
   const filteredTherapists = useMemo(() => {
-    let filtered = mockTherapistsWithProfiles.filter(therapist => {
+    let filtered = therapists.filter(therapist => {
       // Search filter
       const matchesSearch = searchQuery === "" || 
-        therapist.alias.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        therapist.profile.bio.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        therapist.profile.specializations.some(spec => 
+        therapist.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (therapist.bio && therapist.bio.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        therapist.therapy_styles.some(spec => 
           spec.toLowerCase().includes(searchQuery.toLowerCase())
         );
 
       // Specialty filter
       const matchesSpecialty = selectedSpecialties.length === 0 ||
         selectedSpecialties.some(spec => 
-          therapist.profile.specializations.includes(spec)
+          therapist.therapy_styles.includes(spec)
         );
 
       // Rating filter
-      const matchesRating = therapist.profile.rating >= minRating;
+      const matchesRating = therapist.rating >= minRating;
 
       return matchesSearch && matchesSpecialty && matchesRating;
     });
@@ -52,18 +71,18 @@ export default function MarketplacePage() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "rating":
-          return b.profile.rating - a.profile.rating;
+          return b.rating - a.rating;
         case "price":
-          return 5 - 5; // All sessions are $5, so no sorting needed
+          return parseFloat(a.price_per_session || "0") - parseFloat(b.price_per_session || "0");
         case "name":
-          return a.alias.localeCompare(b.alias);
+          return a.full_name.localeCompare(b.full_name);
         default:
           return 0;
       }
     });
 
     return filtered;
-  }, [searchQuery, selectedSpecialties, sortBy, minRating]);
+  }, [therapists, searchQuery, selectedSpecialties, sortBy, minRating]);
 
   const toggleSpecialty = (specialty: string) => {
     setSelectedSpecialties(prev => 
@@ -72,6 +91,23 @@ export default function MarketplacePage() {
         : [...prev, specialty]
     );
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="text-center py-16">
+            <div className="mx-auto w-24 h-24 glass rounded-full flex items-center justify-center mb-4 border-glow animate-pulse">
+              <Search className="w-8 h-8 text-purple-400" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              Loading therapists...
+            </h3>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
@@ -296,11 +332,16 @@ export default function MarketplacePage() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-purple transition-all duration-300">
-              <div className="text-2xl font-bold text-purple-400">{mockTherapistsWithProfiles.length}</div>
+              <div className="text-2xl font-bold text-purple-400">{therapists.length}</div>
               <div className="text-sm text-muted-foreground">Verified Therapists</div>
             </div>
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-blue transition-all duration-300">
-              <div className="text-2xl font-bold text-blue-400">4.8</div>
+              <div className="text-2xl font-bold text-blue-400">
+                {therapists.length > 0 
+                  ? (therapists.reduce((sum, t) => sum + t.rating, 0) / therapists.length).toFixed(1)
+                  : '0.0'
+                }
+              </div>
               <div className="text-sm text-muted-foreground">Average Rating</div>
             </div>
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-green transition-all duration-300">
