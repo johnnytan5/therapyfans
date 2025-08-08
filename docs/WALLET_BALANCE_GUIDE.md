@@ -115,7 +115,7 @@ zkLogin wallets work seamlessly with both approaches:
 // Enoki wallet registration (already set up)
 registerEnokiWallets({
   client: suiClient,
-  network: "devnet",
+  network: "testnet",
   apiKey: process.env.NEXT_PUBLIC_ENOKI_API_KEY!,
   providers: {
     google: { clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID! },
