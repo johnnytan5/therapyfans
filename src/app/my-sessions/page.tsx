@@ -288,7 +288,7 @@ export default function MySessionsPage() {
                                 className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                                 asChild
                               >
-                                <Link href={`/session/${session.meeting_room_id}`}>
+                                <Link href={`/session/room/${session.meeting_room_id}`}>
                                   <Video className="w-4 h-4 mr-2" />
                                   Join Session
                                 </Link>

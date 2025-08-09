@@ -19,6 +19,9 @@ export interface Therapist {
   price_per_session: string | null;
   created_at: string;
   is_verified: boolean;
+  // New fields to persist aggregated feedback
+  rating: number | null;
+  review_count: number | null;
 }
 
 export interface Client {

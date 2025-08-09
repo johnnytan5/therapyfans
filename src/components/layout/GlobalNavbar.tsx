@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EnokiWalletConnect } from "@/components/wallet/EnokiWalletConnect";
 import { useClientProfile } from "@/components/providers/ClientAuthProvider";
+import { supabase } from "@/lib/supabase";
 import { useWalletPersistence } from "@/hooks/useWalletPersistence";
 import { 
   Home, 
@@ -15,7 +16,8 @@ import {
   Calendar, 
   Menu,
   X,
-  Coins
+  Coins,
+  UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,21 +28,35 @@ interface NavItem {
   isActive?: (pathname: string) => boolean;
 }
 
-const getNavItems = (walletAddress?: string): NavItem[] => {
+const getNavItems = (walletAddress?: string, therapistId?: string): NavItem[] => {
   const baseItems: NavItem[] = [
     {
       label: "Home",
       href: "/",
       icon: <Home className="w-4 h-4" />,
       isActive: (pathname) => pathname === "/"
-    },
-    {
+    }
+  ];
+
+  // Only show "Find Therapists" if user is NOT a therapist
+  if (!therapistId) {
+    baseItems.push({
       label: "Find Therapists", 
       href: "/marketplace",
       icon: <Search className="w-4 h-4" />,
       isActive: (pathname) => pathname === "/marketplace" || pathname.startsWith("/therapist")
-    }
-  ];
+    });
+  }
+
+  // Add therapist profile link if user is a therapist
+  if (therapistId) {
+    baseItems.push({
+      label: "My Profile",
+      href: `/therapist/${therapistId}`,
+      icon: <UserCheck className="w-4 h-4" />,
+      isActive: (pathname) => pathname === `/therapist/${therapistId}`
+    });
+  }
 
   // Only add "My Sessions" if we have a wallet address to avoid duplicate /marketplace href
   if (walletAddress) {
@@ -60,10 +76,39 @@ export function GlobalNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { client, wallet_address } = useClientProfile();
   const { isConnected, wasRecentlyConnected } = useWalletPersistence();
-  
+  const [therapistId, setTherapistId] = useState<string | null>(null);
   // Use wallet persistence to prevent UI flicker during navigation
   const effectiveWalletAddress = wallet_address || (wasRecentlyConnected() ? 'temp' : undefined);
-  const navItems = getNavItems(effectiveWalletAddress);
+  
+  // Check if current wallet belongs to a therapist
+  useEffect(() => {
+    async function checkTherapistStatus() {
+      if (!wallet_address) {
+        setTherapistId(null);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('therapists')
+          .select('id')
+          .eq('wallet_address', wallet_address)
+          .single();
+
+        if (!error && data) {
+          setTherapistId(data.id);
+        } else {
+          setTherapistId(null);
+        }
+      } catch (err) {
+        setTherapistId(null);
+      }
+    }
+
+    checkTherapistStatus();
+  }, [wallet_address]);
+  
+  const navItems = getNavItems(effectiveWalletAddress, therapistId || undefined);
 
   // Don't show navbar on active session pages
   if (pathname.includes("/session/") && !pathname.includes("lobby")) {
