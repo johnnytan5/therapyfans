@@ -10,7 +10,7 @@ import { ClientAuthProvider } from '@/components/providers/ClientAuthProvider';
 const { networkConfig } = createNetworkConfig({
 	localnet: { url: getFullnodeUrl('localnet') },
 	mainnet: { url: getFullnodeUrl('mainnet') },
-	devnet: { url: getFullnodeUrl('devnet') },
+	testnet: { url: getFullnodeUrl('testnet') },
 });
 
 const queryClient = new QueryClient();
@@ -22,7 +22,7 @@ interface WalletProvidersProps {
 export function WalletProviders({ children }: WalletProvidersProps) {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<SuiClientProvider networks={networkConfig} defaultNetwork="devnet">
+			<SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
 				<RegisterEnokiWallet />
 				<WalletProvider>
 					<ClientAuthProvider>

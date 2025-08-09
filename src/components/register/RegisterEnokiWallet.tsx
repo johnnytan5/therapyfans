@@ -7,11 +7,11 @@ import { getFullnodeUrl } from '@mysten/sui/client';
 
 export function RegisterEnokiWallet() {
 	useEffect(() => {
-		const suiClient = new SuiClient({ url: getFullnodeUrl('devnet') });
+		const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
 
 		registerEnokiWallets({
 			client: suiClient,
-			network: 'devnet',
+			network: 'testnet',
 			apiKey: process.env.NEXT_PUBLIC_ENOKI_API_KEY!,
 			providers: {
 				google: {

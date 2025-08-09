@@ -172,8 +172,24 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
   const pastSessions = clientSessions.filter(s => s.status === 'completed');
   const upcomingSessions = clientSessions.filter(s => s.status === 'scheduled');
   
-  // Mock recommended therapists (AI-matched)
-  const recommendedTherapists = mockTherapistsWithProfiles.slice(0, 2);
+  // Mock recommended therapists (AI-matched) - convert to new format
+  const recommendedTherapists = mockTherapistsWithProfiles.slice(0, 2).map(therapist => ({
+    id: therapist.id,
+    full_name: therapist.alias,
+    profile_picture_url: null,
+    bio: therapist.profile.bio,
+    qualifications: null,
+    license_number: null,
+    years_of_experience: null,
+    therapy_styles: therapist.metadata?.vibe_tags || [],
+    languages_spoken: ['English'],
+    price_per_session: '5.00',
+    created_at: therapist.created_at,
+    is_verified: therapist.profile.verified,
+    specializations: therapist.profile.specializations,
+    rating: 4.5,
+    reviewCount: 0,
+  }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">

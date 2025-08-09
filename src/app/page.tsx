@@ -3,11 +3,30 @@
 import { Button } from "@/components/ui/button";
 import { TherapistCard } from "@/components/therapy/TherapistCard";
 import { Badge } from "@/components/ui/badge";
-import { mockTherapistsWithProfiles } from "@/data/mockData";
+import { getTherapists, TherapistWithSpecializations } from "@/lib/therapistService";
 import { Shield, Eye, Clock, Zap, Users, Lock, Star, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function Home() {
+  const [therapists, setTherapists] = useState<TherapistWithSpecializations[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTherapists = async () => {
+      try {
+        const data = await getTherapists();
+        setTherapists(data);
+      } catch (error) {
+        console.error('Error fetching therapists:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTherapists();
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
       {/* Hero Section */}
@@ -151,15 +170,38 @@ export default function Home() {
           </div>
           
           <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-6 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-            {mockTherapistsWithProfiles.map((therapist) => (
-              <TherapistCard
-                key={therapist.id}
-                therapist={therapist}
-                onBookSession={() => {
-                  window.location.href = `/therapist/${therapist.id}`;
-                }}
-              />
-            ))}
+            {loading ? (
+              // Loading skeleton
+              Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="glass p-6 rounded-lg border-glow animate-pulse">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <div className="w-12 h-12 bg-muted rounded-full"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-muted rounded w-32"></div>
+                      <div className="h-3 bg-muted rounded w-24"></div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3 bg-muted rounded w-full"></div>
+                    <div className="h-3 bg-muted rounded w-3/4"></div>
+                  </div>
+                </div>
+              ))
+            ) : therapists.length > 0 ? (
+              therapists.slice(0, 3).map((therapist) => (
+                <TherapistCard
+                  key={therapist.id}
+                  therapist={therapist}
+                  onBookSession={() => {
+                    window.location.href = `/therapist/${therapist.id}`;
+                  }}
+                />
+              ))
+            ) : (
+              <div className="col-span-full text-center py-12">
+                <p className="text-muted-foreground">No therapists available at the moment.</p>
+              </div>
+            )}
           </div>
         </div>
       </section>
