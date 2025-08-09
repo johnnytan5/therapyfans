@@ -31,8 +31,21 @@ export async function POST(request: NextRequest) {
       rating,
       totalSessions,
       profileImageUrl,
-      certificationUrl
+      certificationUrl,
+      // ADD THESE NEW FIELDS:
+      retryAttempt = 0,
+      timestamp
     } = requestBody;
+
+    // ADD THIS RETRY HANDLING CODE HERE:
+    console.log(`Processing mint request (attempt ${retryAttempt + 1}) at ${new Date(timestamp || Date.now()).toISOString()}`);
+
+    // Add longer delays and fresh object fetching if this is a retry attempt
+    if (retryAttempt > 0) {
+      console.log(`Retry attempt ${retryAttempt}, waiting for blockchain state to settle...`);
+      // Wait longer for retry attempts to ensure fresh state
+      await new Promise(resolve => setTimeout(resolve, 5000 + (retryAttempt * 3000)));
+    }
 
     if (!userAddress || !packageId) {
       return NextResponse.json({ 
@@ -63,22 +76,25 @@ export async function POST(request: NextRequest) {
     const sponsorAddress = sponsorKeypair.getPublicKey().toSuiAddress();
     console.log('Sponsor address:', sponsorAddress);
 
-    // Check sponsor balance
+    // REPLACE THE EXISTING "Check sponsor balance" SECTION WITH THIS:
+    // Always refresh sponsor coin objects to get latest versions
+    console.log('Refreshing sponsor wallet state...');
     let sponsorCoins;
     try {
       sponsorCoins = await suiClient.getCoins({
         owner: sponsorAddress,
         coinType: '0x2::sui::SUI'
       });
+      console.log(`Fresh sponsor coins available: ${sponsorCoins.data?.length || 0}`);
       
       if (sponsorCoins.data && sponsorCoins.data.length > 0) {
         const totalBalance = sponsorCoins.data.reduce((sum, coin) => sum + BigInt(coin.balance), BigInt(0));
-        console.log('Total sponsor balance:', totalBalance.toString(), 'MIST');
+        console.log('Fresh sponsor balance:', totalBalance.toString(), 'MIST');
       }
-    } catch (balanceError) {
-      console.error('Error fetching sponsor balance:', balanceError);
+    } catch (refreshError) {
+      console.error('Error refreshing sponsor coins:', refreshError);
       return NextResponse.json({ 
-        error: 'Failed to check sponsor wallet balance' 
+        error: 'Failed to refresh sponsor wallet state' 
       }, { status: 500 });
     }
 
@@ -112,7 +128,21 @@ export async function POST(request: NextRequest) {
 
     mintTx.setSender(sponsorAddress);
     mintTx.setGasOwner(sponsorAddress);
-    mintTx.setGasBudget(100_000_000);
+    
+    // REPLACE THE setGasBudget LINE WITH THESE OPTIMIZATIONS:
+    console.log(`Creating mint transaction (attempt ${retryAttempt + 1})...`);
+
+    // Use a slightly different gas budget for retries to avoid caching issues
+    const gasBudget = 100_000_000 + (retryAttempt * 5_000_000);
+    mintTx.setGasBudget(gasBudget);
+    console.log(`Set gas budget: ${gasBudget}`);
+
+    // Add a small random delay before execution on retries
+    if (retryAttempt > 0) {
+      const randomDelay = Math.floor(Math.random() * 2000) + 1000; // 1-3 seconds
+      console.log(`Adding random delay: ${randomDelay}ms`);
+      await new Promise(resolve => setTimeout(resolve, randomDelay));
+    }
 
     try {
       console.log('Executing mint transaction...');
@@ -263,6 +293,7 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
 
 // GET endpoint remains the same
 export async function GET() {
