@@ -22,67 +22,76 @@ import Link from "next/link";
 import { useCurrentAccount } from '@mysten/dapp-kit';
 import { formatTime, formatDate, SessionNFT } from "@/lib/meetingLinks";
 import { formatSui } from "@/lib/utils";
+import { SessionService, BookedSession } from "@/lib/sessionService";
 
-// Mock session data
-const mockUpcomingSessions: SessionNFT[] = [
-  {
-    id: 'nft-001',
-    therapist_wallet: '0x1234...5678',
-    date: '2024-12-21',
-    start_time: '14:00',
-    end_time: '14:30',
-    price_sui: 5.0,
-    status: 'booked',
-    nft_token_id: 'token-20241221-1400-abc123',
-    meeting_link: 'https://devmatch.com/session/a1b2c3d4',
-    meeting_room_id: 'a1b2c3d4',
-    client_wallet: '0xabc...def',
-    purchased_at: '2024-12-20T10:30:00Z'
-  },
-  {
-    id: 'nft-002',
-    therapist_wallet: '0x5678...9abc',
-    date: '2024-12-23',
-    start_time: '16:30',
-    end_time: '17:00',
-    price_sui: 5.0,
-    status: 'booked',
-    nft_token_id: 'token-20241223-1630-def456',
-    meeting_link: 'https://devmatch.com/session/e5f6g7h8',
-    meeting_room_id: 'e5f6g7h8',
-    client_wallet: '0xabc...def',
-    purchased_at: '2024-12-20T14:15:00Z'
-  }
-];
-
-const mockPastSessions: SessionNFT[] = [
-  {
-    id: 'nft-003',
-    therapist_wallet: '0x9abc...def0',
-    date: '2024-12-18',
-    start_time: '10:00',
-    end_time: '10:30',
-    price_sui: 5.0,
-    status: 'completed',
-    nft_token_id: 'token-20241218-1000-ghi789',
-    meeting_link: 'https://devmatch.com/session/i9j0k1l2',
-    meeting_room_id: 'i9j0k1l2',
-    client_wallet: '0xabc...def',
-    purchased_at: '2024-12-17T16:45:00Z'
-  }
-];
-
-// Mock therapist data
-const mockTherapists = {
-  '0x1234...5678': { name: 'Dr. Sarah Johnson', rating: 4.8 },
-  '0x5678...9abc': { name: 'Dr. Michael Chen', rating: 4.9 },
-  '0x9abc...def0': { name: 'Dr. Emily Rodriguez', rating: 4.7 }
-};
+// Transform BookedSession to SessionNFT for UI compatibility
+const transformBookedSessionToNFT = (session: BookedSession): SessionNFT => ({
+  id: session.available_session_id,
+  therapist_wallet: session.therapist_wallet,
+  date: session.date,
+  start_time: session.start_time,
+  end_time: session.end_time,
+  price_sui: session.price_sui,
+  status: session.session_status === 'upcoming' ? 'booked' : 
+          session.session_status === 'completed' ? 'completed' : 'booked',
+  nft_token_id: session.nft_token_id,
+  meeting_link: session.meeting_link,
+  meeting_room_id: session.meeting_room_id,
+  client_wallet: session.client_wallet,
+  purchased_at: session.booked_at
+});
 
 export default function MySessionsPage() {
   const currentAccount = useCurrentAccount();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'nfts'>('upcoming');
   const [copiedLink, setCopiedLink] = useState<string>('');
+  const [upcomingSessions, setUpcomingSessions] = useState<SessionNFT[]>([]);
+  const [pastSessions, setPastSessions] = useState<SessionNFT[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  // Fetch user's booked sessions
+  useEffect(() => {
+    async function fetchUserSessions() {
+      if (!currentAccount?.address) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+
+      try {
+        console.log('📋 Fetching sessions for wallet:', currentAccount.address);
+
+        // Fetch upcoming and past sessions
+        const [upcoming, past] = await Promise.all([
+          SessionService.getClientUpcomingSessions(currentAccount.address),
+          SessionService.getClientPastSessions(currentAccount.address)
+        ]);
+
+        // Transform to UI-compatible format
+        const upcomingNFTs = upcoming.map(transformBookedSessionToNFT);
+        const pastNFTs = past.map(transformBookedSessionToNFT);
+
+        setUpcomingSessions(upcomingNFTs);
+        setPastSessions(pastNFTs);
+
+        console.log('✅ Sessions loaded:', { 
+          upcoming: upcomingNFTs.length, 
+          past: pastNFTs.length 
+        });
+
+      } catch (err) {
+        console.error('❌ Error fetching sessions:', err);
+        setError('Failed to load sessions. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchUserSessions();
+  }, [currentAccount?.address]);
 
   const copyMeetingLink = async (link: string, sessionId: string) => {
     try {
@@ -168,7 +177,7 @@ export default function MySessionsPage() {
             className="relative"
           >
             <Clock className="w-4 h-4 mr-2" />
-            Upcoming ({mockUpcomingSessions.length})
+                            Upcoming ({upcomingSessions.length})
           </Button>
           <Button
             variant={activeTab === 'past' ? 'default' : 'ghost'}
@@ -176,7 +185,7 @@ export default function MySessionsPage() {
             onClick={() => setActiveTab('past')}
           >
             <CheckCircle className="w-4 h-4 mr-2" />
-            Past ({mockPastSessions.length})
+                            Past ({pastSessions.length})
           </Button>
           <Button
             variant={activeTab === 'nfts' ? 'default' : 'ghost'}
@@ -184,7 +193,7 @@ export default function MySessionsPage() {
             onClick={() => setActiveTab('nfts')}
           >
             <Award className="w-4 h-4 mr-2" />
-            NFT Collection ({mockUpcomingSessions.length + mockPastSessions.length})
+                            NFT Collection ({upcomingSessions.length + pastSessions.length})
           </Button>
         </div>
 
@@ -194,14 +203,23 @@ export default function MySessionsPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-foreground">Upcoming Sessions</h2>
               <Badge variant="outline" className="text-green-400 border-green-400/30">
-                {mockUpcomingSessions.length} scheduled
+                {upcomingSessions.length} scheduled
               </Badge>
             </div>
 
-            {mockUpcomingSessions.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading sessions...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-400 mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </div>
+            ) : upcomingSessions.length > 0 ? (
               <div className="grid gap-4">
-                {mockUpcomingSessions.map((session) => {
-                  const therapist = mockTherapists[session.therapist_wallet as keyof typeof mockTherapists];
+                {upcomingSessions.map((session) => {
                   const timeUntil = getTimeUntilSession(session.date, session.start_time);
                   const canJoin = canJoinSession(session.date, session.start_time);
 
@@ -215,10 +233,11 @@ export default function MySessionsPage() {
                                 <User className="w-6 h-6 text-white" />
                               </div>
                               <div>
-                                <h3 className="font-semibold text-foreground">{therapist.name}</h3>
+                                <h3 className="font-semibold text-foreground">Therapist</h3>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                  <span>{therapist.rating}</span>
+                                  <span className="font-mono text-xs">
+                                    {session.therapist_wallet.slice(0, 8)}...{session.therapist_wallet.slice(-6)}
+                                  </span>
                                   <span>•</span>
                                   <span>30 minutes</span>
                                 </div>
@@ -312,14 +331,23 @@ export default function MySessionsPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-foreground">Past Sessions</h2>
               <Badge variant="outline" className="text-blue-400 border-blue-400/30">
-                {mockPastSessions.length} completed
+                {pastSessions.length} completed
               </Badge>
             </div>
 
-            {mockPastSessions.length > 0 ? (
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading sessions...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-400 mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </div>
+            ) : pastSessions.length > 0 ? (
               <div className="grid gap-4">
-                {mockPastSessions.map((session) => {
-                  const therapist = mockTherapists[session.therapist_wallet as keyof typeof mockTherapists];
+                {pastSessions.map((session) => {
 
                   return (
                     <Card key={session.id} className="glass border-glow">
@@ -331,8 +359,12 @@ export default function MySessionsPage() {
                                 <CheckCircle className="w-6 h-6 text-white" />
                               </div>
                               <div>
-                                <h3 className="font-semibold text-foreground">{therapist.name}</h3>
+                                <h3 className="font-semibold text-foreground">Therapist</h3>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <span className="font-mono text-xs">
+                                    {session.therapist_wallet.slice(0, 8)}...{session.therapist_wallet.slice(-6)}
+                                  </span>
+                                  <span>•</span>
                                   <span>Completed</span>
                                   <span>•</span>
                                   <span>{formatDate(session.date)}</span>
@@ -389,13 +421,23 @@ export default function MySessionsPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-foreground">NFT Collection</h2>
               <Badge variant="outline" className="text-purple-400 border-purple-400/30">
-                {mockUpcomingSessions.length + mockPastSessions.length} NFTs owned
+                {upcomingSessions.length + pastSessions.length} NFTs owned
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[...mockUpcomingSessions, ...mockPastSessions].map((session) => {
-                const therapist = mockTherapists[session.therapist_wallet as keyof typeof mockTherapists];
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Loading NFTs...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-8">
+                <p className="text-red-400 mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()}>Try Again</Button>
+              </div>
+            ) : (upcomingSessions.length + pastSessions.length) > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[...upcomingSessions, ...pastSessions].map((session) => {
 
                 return (
                   <Card key={session.id} className="glass border-glow hover:glow-purple transition-all duration-300">
@@ -415,7 +457,10 @@ export default function MySessionsPage() {
                         <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg mx-auto mb-3 flex items-center justify-center">
                           <Award className="w-8 h-8 text-white" />
                         </div>
-                        <h3 className="font-semibold text-foreground">{therapist.name}</h3>
+                        <h3 className="font-semibold text-foreground">Therapist Session</h3>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {session.therapist_wallet.slice(0, 8)}...{session.therapist_wallet.slice(-6)}
+                        </p>
                         <p className="text-sm text-muted-foreground">{formatDate(session.date)}</p>
                       </div>
 
@@ -445,6 +490,45 @@ export default function MySessionsPage() {
                 );
               })}
             </div>
+            ) : (
+              <div className="text-center py-12">
+                <Award className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No Session NFTs</h3>
+                <p className="text-muted-foreground mb-4">
+                  Book your first therapy session to start collecting NFTs
+                </p>
+                <Link href="/marketplace">
+                  <Button>Explore Therapists</Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty states for upcoming and past sessions */}
+        {activeTab === 'upcoming' && !loading && !error && upcomingSessions.length === 0 && (
+          <div className="text-center py-12">
+            <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">No Upcoming Sessions</h3>
+            <p className="text-muted-foreground mb-4">
+              You don't have any scheduled therapy sessions yet
+            </p>
+            <Link href="/marketplace">
+              <Button>Book a Session</Button>
+            </Link>
+          </div>
+        )}
+
+        {activeTab === 'past' && !loading && !error && pastSessions.length === 0 && (
+          <div className="text-center py-12">
+            <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-foreground mb-2">No Past Sessions</h3>
+            <p className="text-muted-foreground mb-4">
+              Your completed therapy sessions will appear here
+            </p>
+            <Link href="/marketplace">
+              <Button>Book Your First Session</Button>
+            </Link>
           </div>
         )}
       </div>

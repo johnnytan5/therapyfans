@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { EnokiWalletConnect } from "@/components/wallet/EnokiWalletConnect";
 import { useClientProfile } from "@/components/providers/ClientAuthProvider";
 import { supabase } from "@/lib/supabase";
+import { useWalletPersistence } from "@/hooks/useWalletPersistence";
 import { 
   Home, 
   Search, 
@@ -85,7 +86,10 @@ export function GlobalNavbar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { client, wallet_address } = useClientProfile();
+  const { isConnected, wasRecentlyConnected } = useWalletPersistence();
   const [therapistId, setTherapistId] = useState<string | null>(null);
+  // Use wallet persistence to prevent UI flicker during navigation
+  const effectiveWalletAddress = wallet_address || (wasRecentlyConnected() ? 'temp' : undefined);
   
   // Check if current wallet belongs to a therapist
   useEffect(() => {
@@ -115,7 +119,7 @@ export function GlobalNavbar() {
     checkTherapistStatus();
   }, [wallet_address]);
   
-  const navItems = getNavItems(wallet_address || undefined, therapistId || undefined);
+  const navItems = getNavItems(effectiveWalletAddress, therapistId || undefined);
 
   // Don't show navbar on active session pages
   if (pathname.includes("/session/") && !pathname.includes("lobby")) {

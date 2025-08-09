@@ -24,6 +24,28 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
   const [authProvider, setAuthProvider] = useState<'google' | 'facebook' | 'twitch' | null>(null);
   const lastWalletRef = useRef<string | null>(null);
 
+  // Persist wallet connection state
+  useEffect(() => {
+    if (currentAccount?.address) {
+      localStorage.setItem('devmatch_wallet_connected', 'true');
+      localStorage.setItem('devmatch_wallet_address', currentAccount.address);
+    } else {
+      localStorage.removeItem('devmatch_wallet_connected');
+      localStorage.removeItem('devmatch_wallet_address');
+    }
+  }, [currentAccount?.address]);
+
+  // Check for persisted connection on mount
+  useEffect(() => {
+    const wasConnected = localStorage.getItem('devmatch_wallet_connected');
+    const persistedAddress = localStorage.getItem('devmatch_wallet_address');
+    
+    if (wasConnected && persistedAddress && !currentAccount?.address) {
+      console.log('🔄 Detected previous wallet connection, attempting to restore...');
+      // The wallet SDK should handle reconnection automatically
+    }
+  }, [currentAccount?.address]);
+
   const handleWalletConnection = useCallback(async (walletAddress: string) => {
     setIsLoading(true);
     try {
@@ -202,22 +224,29 @@ export function ClientAuthProvider({ children }: ClientAuthProviderProps) {
 
   // Effect to handle wallet connection changes
   useEffect(() => {
-    if (!currentAccount?.address) {
-      // Wallet disconnected
-      if (lastWalletRef.current) {
-        setClientProfile(null);
-        setAuthProvider(null);
-        lastWalletRef.current = null;
+    // Add a small delay to prevent premature disconnection during route changes
+    const connectionTimeout = setTimeout(() => {
+      if (!currentAccount?.address) {
+        // Wallet disconnected
+        if (lastWalletRef.current) {
+          console.log('🔌 Wallet disconnected, clearing profile');
+          setClientProfile(null);
+          setAuthProvider(null);
+          lastWalletRef.current = null;
+        }
+        return;
       }
-      return;
-    }
 
-    // Only trigger if wallet address actually changed
-    if (lastWalletRef.current !== currentAccount.address) {
-      lastWalletRef.current = currentAccount.address;
-      // Wallet connected - fetch or create client profile
-      handleWalletConnection(currentAccount.address);
-    }
+      // Only trigger if wallet address actually changed
+      if (lastWalletRef.current !== currentAccount.address) {
+        console.log('🔌 Wallet connected/changed:', currentAccount.address);
+        lastWalletRef.current = currentAccount.address;
+        // Wallet connected - fetch or create client profile
+        handleWalletConnection(currentAccount.address);
+      }
+    }, 100); // 100ms delay to prevent race conditions during navigation
+
+    return () => clearTimeout(connectionTimeout);
   }, [currentAccount?.address, handleWalletConnection]);
 
   const contextValue = useMemo(() => ({

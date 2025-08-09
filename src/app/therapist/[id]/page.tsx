@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useCurrentAccount } from "@mysten/dapp-kit";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/lib/supabase";
-import { Clock, CheckCircle, AlertCircle, ArrowLeft, Calendar } from "lucide-react";
-import Link from "next/link";
-
+import { useState, useEffect } from 'react';
+import { useRouter } from "next/navigation";
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
+import { Shield, Clock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 interface TherapistProfilePageProps {
   params: {

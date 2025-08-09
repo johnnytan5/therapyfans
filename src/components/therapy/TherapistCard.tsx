@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { VibeTag } from "./VibeTag";
 import { TherapistWithSpecializations } from "@/lib/therapistService";
 import { Star, Shield, Clock } from "lucide-react";
-import { createBlurredAvatar, formatSui } from "@/lib/utils";
-import { getDisplayName, formatPrice } from "@/lib/therapistService";
+import { formatSui } from "@/lib/utils";
+import { formatPrice } from "@/lib/therapistService";
 
 interface TherapistCardProps {
   therapist: TherapistWithSpecializations;
@@ -16,30 +16,29 @@ interface TherapistCardProps {
 }
 
 export function TherapistCard({ therapist, onBookSession, compact = false }: TherapistCardProps) {
-  const displayName = getDisplayName(therapist.full_name);
   const price = formatPrice(therapist.price_per_session);
   
   return (
     <Card className="group hover:shadow-lg transition-all duration-500 border-0 glass border-glow hover:glow-purple scale-in hover:scale-[1.02] hover:-translate-y-1">
       <CardHeader className="pb-4">
         <div className="flex items-start gap-4">
-          {/* Enhanced Blurred Avatar for Privacy */}
+          {/* Professional Therapist Photo */}
           <div className="relative">
-            <div 
-              className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-400 via-blue-500 to-cyan-400 blur-sm opacity-75 group-hover:opacity-90 transition-all duration-300"
-              style={{
-                backgroundImage: `url(${createBlurredAvatar(therapist.id)})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
+            <img
+              src={`https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${therapist.id}`}
+              alt={`${therapist.full_name} - Professional Therapist`}
+              className="w-14 h-14 rounded-full object-cover border-2 border-white/30 group-hover:border-purple-400/50 transition-all duration-300 group-hover:scale-105"
             />
-            <div className="absolute inset-0 rounded-full border-2 border-white/30 group-hover:border-purple-400/50 transition-colors duration-300" />
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-purple-400/10 to-blue-500/10 group-hover:from-purple-400/20 group-hover:to-blue-500/20 transition-all duration-300" />
+            {therapist.is_verified && (
+              <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1 border-2 border-background">
+                <Shield className="w-3 h-3 text-white" />
+              </div>
+            )}
           </div>
           
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-bold text-lg truncate bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-purple-300 group-hover:to-cyan-300 transition-all duration-300">{displayName}</h3>
+              <h3 className="font-bold text-lg bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text group-hover:from-purple-300 group-hover:to-cyan-300 transition-all duration-300">{therapist.full_name}</h3>
               {therapist.is_verified && (
                 <Badge variant="verified" className="gap-1 bg-gradient-to-r from-green-500/20 to-emerald-500/20 border-green-400/30 text-green-300 hover:from-green-500/30 hover:to-emerald-500/30 transition-all duration-300">
                   <Shield className="w-3 h-3" />

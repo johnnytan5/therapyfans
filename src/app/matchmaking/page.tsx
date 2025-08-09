@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ClientPreferencesForm } from "@/components/therapy/ClientPreferencesForm";
 import { AIMatchResults } from "@/components/therapy/AIMatchResults";
 import { getTherapists, TherapistWithSpecializations } from "@/lib/therapistService";
@@ -10,6 +11,7 @@ import { Sparkles, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 export default function MatchmakingPage() {
+  const router = useRouter();
   const [therapists, setTherapists] = useState<TherapistWithSpecializations[]>([]);
   const [matches, setMatches] = useState<TherapistMatch[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export default function MatchmakingPage() {
 
   const handleBookSession = (therapistId: string) => {
     // Navigate to booking page
-    window.location.href = `/purchase/session-${therapistId}`;
+    router.push(`/purchase/session-${therapistId}`);
   };
 
   return (

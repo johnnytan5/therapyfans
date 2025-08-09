@@ -266,6 +266,17 @@ export async function getTherapists(): Promise<TherapistWithSpecializations[]> {
       return [];
     }
 
+    console.log('🔍 Raw therapist data from database:');
+    data?.forEach((t, index) => {
+      console.log(`Therapist ${index + 1}:`, {
+        id: t.id,
+        name: t.full_name,
+        price_per_session: t.price_per_session,
+        all_price_fields: Object.keys(t).filter(key => key.toLowerCase().includes('price') || key.toLowerCase().includes('cost') || key.toLowerCase().includes('rate')),
+        all_fields: Object.keys(t)
+      });
+    });
+
     // Transform the data to flatten specializations and add ratings
     const therapists = data?.map((therapist: any) => ({
       ...therapist,
@@ -277,6 +288,8 @@ export async function getTherapists(): Promise<TherapistWithSpecializations[]> {
       reviewCount: typeof therapist.review_count === 'number' && !Number.isNaN(therapist.review_count)
         ? therapist.review_count
         : null,
+      // Check for different possible price column names
+      price_per_session: therapist.price_per_session || therapist.sui_price || therapist.price || therapist.session_price || '0.01',
     })) || [];
 
     return therapists;
@@ -341,7 +354,12 @@ export function getDisplayName(fullName: string | null | undefined): string {
 
 // Helper function to format price
 export function formatPrice(price: string | null): string {
-  if (!price) return '5.00';
+  console.log('🏷️ formatPrice called with:', price);
+  if (!price) {
+    console.log('⚠️ Price is null/empty, using fallback 0.01');
+    return '0.01';
+  }
   const numPrice = parseFloat(price);
+  console.log('💰 Formatted price:', numPrice.toFixed(2));
   return numPrice.toFixed(2);
 }

@@ -12,12 +12,11 @@ import { Transaction } from '@mysten/sui/transactions';
 import { getTherapistById, TherapistWithSpecializations, getDisplayName } from "@/lib/therapistService";
 import { 
   SessionNFT, 
-  generateMockTimeSlots, 
   formatTime, 
   formatDate, 
-  getDayName, 
-  processNFTPurchase 
+  getDayName 
 } from "@/lib/meetingLinks";
+import { SessionService, BookingData } from "@/lib/sessionService";
 import { createBlurredAvatar, formatSui, mistToSui } from "@/lib/utils";
 
 // SUI Network constants
@@ -41,6 +40,7 @@ export default function TherapistBookingPage() {
   const [paymentError, setPaymentError] = useState<string>('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [bookedNFT, setBookedNFT] = useState<SessionNFT | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState(3);
 
   // Get wallet balance
   const { data: balanceData, isLoading: isLoadingBalance } = useSuiClientQuery(
@@ -56,29 +56,65 @@ export default function TherapistBookingPage() {
 
   const walletBalance = balanceData ? parseFloat(mistToSui(balanceData.totalBalance).toFixed(4)) : 0;
 
-  // Fetch therapist data
+  // Fetch therapist data and available sessions
   useEffect(() => {
-    async function fetchTherapist() {
+    async function fetchTherapistAndSessions() {
       setLoading(true);
       try {
         const therapistData = await getTherapistById(walletAddress);
         if (therapistData) {
           setTherapist(therapistData);
-          // Generate mock time slots
-          const slots = generateMockTimeSlots(walletAddress);
-          setTimeSlots(slots);
+          // Fetch real available sessions from database
+          const sessions = await SessionService.getAllAvailableSessionsForTherapist(walletAddress);
+          setTimeSlots(sessions);
         }
       } catch (error) {
-        console.error('Error fetching therapist:', error);
+        console.error('Error fetching therapist and sessions:', error);
       } finally {
         setLoading(false);
       }
     }
 
     if (walletAddress) {
-      fetchTherapist();
+      fetchTherapistAndSessions();
     }
   }, [walletAddress]);
+
+  // Handle countdown and redirect
+  useEffect(() => {
+    let countdownInterval: NodeJS.Timeout;
+
+    if (showSuccessModal && redirectCountdown > 0) {
+      countdownInterval = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            // Navigate to client profile page when countdown reaches 0
+            const clientWallet = currentAccount?.address || 'mock-wallet-address';
+            router.push(`/client/${clientWallet}`);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+    };
+  }, [showSuccessModal, router]); // Removed redirectCountdown from dependencies
+
+  // Refresh available sessions (for manual refresh)
+  const refreshSessions = async () => {
+    try {
+      console.log('🔄 Refreshing available sessions...');
+      const sessions = await SessionService.getAllAvailableSessionsForTherapist(walletAddress);
+      setTimeSlots(sessions);
+    } catch (error) {
+      console.error('Error refreshing sessions:', error);
+    }
+  };
 
   // Filter time slots for selected date only
   const selectedDateSlots = useMemo(() => {
@@ -115,7 +151,7 @@ export default function TherapistBookingPage() {
     setPaymentError('');
     
     try {
-      console.log('Starting mock payment...', { 
+      console.log('Starting session booking...', { 
         slot: selectedSlot.id, 
         wallet: walletAddr,
         therapist: walletAddress 
@@ -128,30 +164,44 @@ export default function TherapistBookingPage() {
       const mockTxHash = `0x${Math.random().toString(16).substr(2, 40)}`;
       setTransactionHash(mockTxHash);
       
-      // Process NFT purchase
-      const newBookedNFT = processNFTPurchase(selectedSlot, walletAddr);
-      setBookedNFT(newBookedNFT);
+      // Book the session in the database
+      const bookingData: BookingData = {
+        client_wallet: walletAddr,
+        transaction_hash: mockTxHash,
+        payment_status: 'completed'
+      };
       
-      // Update local state
-      setTimeSlots(prev => prev.map(slot => 
-        slot.id === selectedSlot.id ? newBookedNFT : slot
-      ));
+      const bookingResult = await SessionService.bookSession(selectedSlot.id, bookingData);
+      
+      if (!bookingResult.success) {
+        throw new Error(bookingResult.error || 'Booking failed');
+      }
+      
+      if (bookingResult.bookedSession) {
+        setBookedNFT(bookingResult.bookedSession);
+        
+        // Update local state - mark slot as booked
+        setTimeSlots(prev => prev.map(slot => 
+          slot.id === selectedSlot.id ? { ...slot, status: 'booked' } : slot
+        ));
+      }
       
       setPurchaseComplete(true);
       setPurchasing(false);
       
-      // Show success modal
+      // Show success modal and start countdown
       setShowSuccessModal(true);
+      setRedirectCountdown(3);
       
-      console.log('Mock payment successful:', {
+      console.log('Session booking successful:', {
         amount: selectedSlot.price_sui,
         therapist: walletAddress,
-        nft: newBookedNFT
+        booking: bookingResult.bookedSession
       });
       
     } catch (error: any) {
-      console.error('Purchase failed:', error);
-      setPaymentError(error.message);
+      console.error('Booking failed:', error);
+      setPaymentError(error.message || 'Booking failed. Please try again.');
       setPurchasing(false);
     }
   };
@@ -215,12 +265,12 @@ export default function TherapistBookingPage() {
                 <div className="text-center space-y-4">
                   <div className="relative mx-auto w-24 h-24">
                     <img
-                      src={`https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face`}
-                      alt={therapist.full_name}
-                      className="w-full h-full rounded-full object-cover border-2 border-border"
+                      src={`https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${therapist.id}`}
+                      alt={`${therapist.full_name} - Professional Therapist`}
+                      className="w-full h-full rounded-full object-cover border-2 border-border hover:border-purple-400/50 transition-all duration-300"
                     />
                     {therapist.is_verified && (
-                      <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1">
+                      <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1 border-2 border-background">
                         <Shield className="w-3 h-3 text-white" />
                       </div>
                     )}
@@ -599,7 +649,7 @@ export default function TherapistBookingPage() {
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-start gap-2">
                     <span className="text-green-400">•</span>
-                    <span>Check "My Sessions" for session details</span>
+                    <span>Check your profile for session details</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <span className="text-green-400">•</span>
@@ -612,6 +662,13 @@ export default function TherapistBookingPage() {
                 </div>
               </div>
 
+              {/* Auto-redirect Notice */}
+              <div className="text-center p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                <p className="text-sm text-blue-400">
+                  Redirecting to your profile in {redirectCountdown} seconds...
+                </p>
+              </div>
+
               {/* Action Buttons */}
               <div className="flex gap-3">
                 <Button
@@ -619,16 +676,17 @@ export default function TherapistBookingPage() {
                   onClick={() => setShowSuccessModal(false)}
                   className="flex-1"
                 >
-                  Close
+                  Stay Here
                 </Button>
                 <Button
                   onClick={() => {
                     setShowSuccessModal(false);
-                    router.push('/my-sessions');
+                    const clientWallet = currentAccount?.address || 'mock-wallet-address';
+                    router.push(`/client/${clientWallet}`);
                   }}
                   className="flex-1 bg-gradient-to-r from-purple-500 to-blue-500"
                 >
-                  View My Sessions
+                  Go to Profile →
                 </Button>
               </div>
             </CardContent>
