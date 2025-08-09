@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 // Constants
-const PACKAGE_ID = "0x4257be6ae1a26a4bc491ca2d4db672678c3c50bee810efa8e6c34cf3cfa135c3";
+const PACKAGE_ID = "0x7dee12dcb0e9afc507ef32e7741f18009f30ffbabe9fabdf53c2a4331793a76e";
 const NETWORK = "testnet";
 const EXPLORER_URL = "https://suiscan.xyz/testnet";
 
