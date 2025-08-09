@@ -183,7 +183,7 @@ export default function TherapistOnboardingPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm mb-2">Price per 15-min session (SUI)</label>
+                  <label className="block text-sm mb-2">Price per 30-min session (SUI)</label>
                   <Input value={pricePerSession} onChange={(e) => setPricePerSession(e.target.value)} />
                 </div>
               </div>

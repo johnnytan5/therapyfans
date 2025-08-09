@@ -16,6 +16,7 @@ import {
 interface Props {
   therapistId: string;
   therapistWallet?: string;
+  therapistPrice?: string | number | null; // price from therapist table
   initialSessions: TherapistSessionsResult | null;
   onSessionsUpdated?: (sessions: TherapistSessionsResult) => void;
 }
@@ -30,7 +31,7 @@ const TIME_SLOTS = [
   '20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30'
 ];
 
-export function CalendlyStyleAvailability({ therapistId, therapistWallet, initialSessions, onSessionsUpdated }: Props) {
+export function CalendlyStyleAvailability({ therapistId, therapistWallet, therapistPrice, initialSessions, onSessionsUpdated }: Props) {
   const [sessions, setSessions] = useState<TherapistSessionsResult | null>(initialSessions);
   const [busy, setBusy] = useState(false);
   const [currentWeek, setCurrentWeek] = useState(() => {
@@ -52,16 +53,57 @@ export function CalendlyStyleAvailability({ therapistId, therapistWallet, initia
       const date = new Date(currentWeek);
       date.setDate(currentWeek.getDate() + i);
       days.push(date);
+      console.log(`Day ${i}:`, {
+        date: date.toDateString(),
+        dayOfWeek: date.getDay(),
+        expectedDayName: DAYS[date.getDay()],
+        columnDayName: DAYS[i]
+      });
     }
     return days;
   }, [currentWeek]);
 
   const getSlotForDateTime = useCallback((date: Date, time: string) => {
-    const dateStr = date.toISOString().slice(0, 10);
-    return sessions?.available.find(s => 
-      s.scheduled_at?.slice(0, 10) === dateStr &&
-      new Date(s.scheduled_at).toISOString().slice(11, 16) === time
-    );
+    // Create a date object for the exact slot we're looking for in local time
+    const [hours, minutes] = time.split(':').map(Number);
+    const targetDateTime = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes);
+    const targetISO = targetDateTime.toISOString();
+    
+    // Debug log for August 9th specifically
+    if (date.getDate() === 9 && date.getMonth() === 7) { // August is month 7
+      console.log('🔍 AUGUST 9th DEBUGGING - getSlotForDateTime:', {
+        inputDate: date.toDateString(),
+        inputTime: time,
+        targetDateTime: targetDateTime.toString(),
+        targetISO: targetISO,
+        availableSessions: sessions?.available?.map(s => ({
+          id: s.id,
+          scheduled_at: s.scheduled_at,
+          parsed: new Date(s.scheduled_at || '').toString()
+        }))
+      });
+    }
+    
+    return sessions?.available.find(s => {
+      if (!s.scheduled_at) return false;
+      
+      // Compare the ISO strings directly (within 1 minute tolerance for any rounding)
+      const storedTime = new Date(s.scheduled_at).getTime();
+      const targetTime = targetDateTime.getTime();
+      const timeDiff = Math.abs(storedTime - targetTime);
+      
+      const matches = timeDiff < 60000; // Within 1 minute
+      if (matches || (date.getDate() === 9 && date.getMonth() === 7)) {
+        console.log('Slot comparison result:', {
+          lookingFor: { date: date.toDateString(), time, iso: targetISO },
+          found: { iso: s.scheduled_at, timeDiff, matches },
+          storedDateTime: new Date(s.scheduled_at).toString(),
+          targetDateTime: targetDateTime.toString()
+        });
+      }
+      
+      return matches;
+    });
   }, [sessions?.available]);
 
   const isBooked = useCallback((date: Date, time: string) => {
@@ -78,16 +120,42 @@ export function CalendlyStyleAvailability({ therapistId, therapistWallet, initia
         console.log('Removing slot:', existing.id);
         await deleteAvailableSession(existing.id);
       } else {
-        // Add slot
-        const dateStr = date.toISOString().slice(0, 10);
-        const iso = new Date(`${dateStr}T${time}:00Z`).toISOString();
-        console.log('Creating slot for:', dateStr, time, iso);
+        // Add slot - create in local timezone to match what user sees
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const day = date.getDate();
+        const [hours, minutes] = time.split(':').map(Number);
+        
+        console.log('BEFORE Creating Date:', {
+          originalDate: date.toDateString(),
+          year, month, day, hours, minutes,
+          timeSlot: time,
+          dateToString: date.toString(),
+          dateGetTimezoneOffset: date.getTimezoneOffset()
+        });
+        
+        // Create date in local timezone
+        const localDateTime = new Date(year, month, day, hours, minutes);
+        const iso = localDateTime.toISOString();
+        
+        console.log('AFTER Creating Date:', {
+          localDateTime: localDateTime.toString(),
+          localDateTimeISO: localDateTime.toISOString(),
+          localDateTimeGetTime: localDateTime.getTime(),
+          timezoneOffset: localDateTime.getTimezoneOffset(),
+          formattedTime: localDateTime.toTimeString(),
+          iso: iso
+        });
+        
+        // Use therapist's price or default to 5 SUI
+        const priceToUse = therapistPrice ? parseFloat(therapistPrice.toString()) : 5;
+        
         const result = await createAvailableSession({
           therapistId,
           therapistWallet,
           scheduledAt: iso,
           durationMinutes: 30,
-          priceSui: 5,
+          priceSui: priceToUse,
         });
         console.log('Create result:', result);
       }
@@ -147,7 +215,7 @@ export function CalendlyStyleAvailability({ therapistId, therapistWallet, initia
               <div className="p-3 text-sm font-medium text-center border-r">Time</div>
               {weekDays.map((date, i) => (
                 <div key={i} className={`p-3 text-sm font-medium text-center border-r last:border-r-0 ${isToday(date) ? 'bg-blue-50 text-blue-700' : ''}`}>
-                  <div>{DAYS[i]}</div>
+                  <div>{DAYS[date.getDay()]}</div>
                   <div className="text-xs opacity-70">{date.getDate()}</div>
                 </div>
               ))}
@@ -177,7 +245,20 @@ export function CalendlyStyleAvailability({ therapistId, therapistWallet, initia
                         }`}
                         disabled={disabled || booked}
                         onClick={() => {
-                          console.log('Button clicked for:', date.toDateString(), time);
+                          const isAug9 = date.getDate() === 9 && date.getMonth() === 7;
+                          const isFirstSlot = time === '00:00';
+                          
+                          console.log('Button clicked for:', {
+                            dateString: date.toDateString(),
+                            dayOfWeek: date.getDay(), // 0=Sunday, 1=Monday, etc.
+                            expectedDay: DAYS[date.getDay()],
+                            columnIndex: i,
+                            time: time,
+                            fullDate: date,
+                            isAug9: isAug9,
+                            isFirstSlot: isFirstSlot,
+                            special: isAug9 && isFirstSlot ? '🚨 AUGUST 9th FIRST SLOT' : ''
+                          });
                           toggleSlot(date, time);
                         }}
                       >
