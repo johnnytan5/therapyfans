@@ -14,18 +14,9 @@ export interface TherapistWithSpecializations {
   created_at: string;
   is_verified: boolean;
   specializations: string[];
-  rating?: number;
-  reviewCount?: number;
+  rating?: number | null;
+  reviewCount?: number | null;
 }
-
-// Mock ratings for now - in a real app, you'd calculate these from reviews
-const mockRatings: Record<string, { rating: number; reviewCount: number }> = {
-  '95bc553d-9fc5-408c-b646-f85c2e0e0f9b': { rating: 4.8, reviewCount: 12 }, // Dr. Sarah Chen
-  '45743031-78a6-4c93-9f4c-343e6518d117': { rating: 4.9, reviewCount: 8 },  // Dr. Ahmed Hassan
-  'dfad81a3-b1b7-4c53-a0ef-abbedc159d82': { rating: 4.7, reviewCount: 15 }, // Maria Rodriguez
-  '1add72c5-5605-4457-b620-12a97d47d671': { rating: 4.6, reviewCount: 6 },  // Dr. James Williams
-  '10e722e7-584d-4c23-83f0-1e69d7b0c473': { rating: 4.9, reviewCount: 10 }, // Lisa Thompson
-};
 
 export async function getTherapists(): Promise<TherapistWithSpecializations[]> {
   try {
@@ -48,8 +39,13 @@ export async function getTherapists(): Promise<TherapistWithSpecializations[]> {
     const therapists = data?.map((therapist: any) => ({
       ...therapist,
       specializations: therapist.therapist_specializations?.map((ts: any) => ts.specializations?.name).filter(Boolean) || [],
-      rating: mockRatings[therapist.id]?.rating || 4.5,
-      reviewCount: mockRatings[therapist.id]?.reviewCount || 0,
+      // Use DB columns; default to nulls if not present
+      rating: typeof therapist.rating === 'number' && !Number.isNaN(therapist.rating)
+        ? therapist.rating
+        : null,
+      reviewCount: typeof therapist.review_count === 'number' && !Number.isNaN(therapist.review_count)
+        ? therapist.review_count
+        : null,
     })) || [];
 
     return therapists;
@@ -83,8 +79,12 @@ export async function getTherapistById(id: string): Promise<TherapistWithSpecial
     return {
       ...data,
       specializations: data.therapist_specializations?.map((ts: any) => ts.specializations?.name).filter(Boolean) || [],
-      rating: mockRatings[data.id]?.rating || 4.5,
-      reviewCount: mockRatings[data.id]?.reviewCount || 0,
+      rating: typeof data.rating === 'number' && !Number.isNaN(data.rating)
+        ? data.rating
+        : null,
+      reviewCount: typeof data.review_count === 'number' && !Number.isNaN(data.review_count)
+        ? data.review_count
+        : null,
     };
   } catch (error) {
     console.error('Error in getTherapistById:', error);

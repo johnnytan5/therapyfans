@@ -1,25 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { VibeTag } from "@/components/therapy/VibeTag";
-import { mockTherapistsWithProfiles, mockAvailableSlots } from "@/data/mockData";
-import { 
-  Star, 
-  Shield, 
-  Clock, 
-  Calendar, 
-  ArrowLeft, 
-  CheckCircle,
-  Award,
-  Users,
-  MessageCircle,
-  Zap
-} from "lucide-react";
-import Link from "next/link";
-import { createBlurredAvatar, formatSui } from "@/lib/utils";
+import { useState, useEffect } from 'react';
+import { useCurrentAccount } from '@mysten/dapp-kit';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
+import { Shield, Clock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 interface TherapistProfilePageProps {
   params: {
@@ -27,316 +15,228 @@ interface TherapistProfilePageProps {
   };
 }
 
-export default async function TherapistProfilePage({ params }: TherapistProfilePageProps) {
-  const resolvedParams = await params;
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>("");
-  
-  // Mock therapist data (in real app, fetch from API based on params.id)
-  const therapist = mockTherapistsWithProfiles.find(t => t.id === resolvedParams.id) || mockTherapistsWithProfiles[0];
-  const { alias, profile, tags } = therapist;
+export default function TherapistProfilePage({ params }: TherapistProfilePageProps) {
+  const account = useCurrentAccount();
+  const [therapist, setTherapist] = useState<any>(null);
+  const [specializations, setSpecializations] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock session stats
-  const sessionStats = {
-    totalSessions: 127,
-    responseTime: "< 2 hours",
-    completionRate: 98
-  };
+  useEffect(() => {
+    async function fetchTherapistData() {
+      try {
+        const resolvedParams = await params;
+        
+        // Fetch therapist data
+        const { data: therapistData, error: therapistError } = await supabase
+          .from('therapists')
+          .select('*')
+          .eq('id', resolvedParams.id)
+          .single();
 
-  const handleBookSession = (timeSlot: string) => {
-    // Navigate to purchase page with selected time
-    window.location.href = `/purchase/session-${therapist.id}?time=${timeSlot}`;
-  };
+        if (therapistError) {
+          setError('Therapist not found');
+          return;
+        }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-purple-950">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/marketplace">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Marketplace
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Therapist Profile
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                Anonymous verified professional
-              </p>
-            </div>
+        setTherapist(therapistData);
+
+        // Fetch specializations
+        const { data: specData, error: specError } = await supabase
+          .from('therapist_specializations')
+          .select(`
+            specializations(name)
+          `)
+          .eq('therapist_id', resolvedParams.id);
+
+        if (!specError && specData) {
+          const specNames = specData
+            .map((spec: any) => spec.specializations?.name)
+            .filter(Boolean);
+          setSpecializations(specNames);
+        }
+      } catch (err) {
+        setError('Failed to load therapist profile');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTherapistData();
+  }, [params]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen py-10">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+            <p>Loading therapist profile...</p>
           </div>
         </div>
-      </header>
+      </div>
+    );
+  }
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Profile Info */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Main Profile Card */}
-            <Card className="border-0 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-800">
-              <CardHeader>
-                <div className="flex items-start gap-6">
-                  {/* Blurred Avatar */}
-                  <div className="relative">
-                    <div 
-                      className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-400 to-blue-500 blur-sm opacity-70"
-                      style={{
-                        backgroundImage: `url(${createBlurredAvatar(therapist.id)})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                      }}
-                    />
-                    <div className="absolute inset-0 rounded-full border-4 border-white/20" />
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                        {alias}
-                      </h1>
-                      {profile.verified && (
-                        <Badge variant="verified" className="gap-1">
-                          <Shield className="w-4 h-4" />
-                          Verified
-                        </Badge>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                        <span className="font-semibold text-lg">{profile.rating}</span>
-                        <span className="text-gray-600 dark:text-gray-400">({sessionStats.totalSessions} sessions)</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-green-600">
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="text-sm">{sessionStats.completionRate}% completion rate</span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-gray-700 dark:text-gray-300 text-lg leading-relaxed">
-                      {profile.bio}
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
+  if (error || !therapist) {
+    return (
+      <div className="min-h-screen py-10">
+        <div className="max-w-4xl mx-auto px-4">
+          <Card>
+            <CardContent className="text-center py-10">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">Profile Not Found</h2>
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <Button asChild>
+                <Link href="/therapist-onboarding">Go to Onboarding</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
-            {/* Specializations & Approach */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Card className="border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Award className="w-5 h-5 text-purple-600" />
-                    Specializations
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {profile.specializations.map((spec) => (
-                      <div key={spec} className="flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        <span className="font-medium">{spec}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+  const isOwner = account?.address === therapist.wallet_address;
 
-              <Card className="border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageCircle className="w-5 h-5 text-blue-600" />
-                    Therapy Style
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {tags.map((tag) => (
-                      <VibeTag key={tag.id} tag={tag.name} />
-                    ))}
-                  </div>
-                  <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                    <p><strong>Response Time:</strong> {sessionStats.responseTime}</p>
-                    <p><strong>Session Format:</strong> 15-minute focused sessions</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+  return (
+    <div className="min-h-screen py-10">
+      <div className="max-w-4xl mx-auto px-4">
+        <div className="mb-6">
+          <Button variant="ghost" asChild>
+            <Link href="/">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Home
+            </Link>
+          </Button>
+        </div>
 
-            {/* Reviews Section */}
-            <Card className="border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Star className="w-5 h-5 text-yellow-500" />
-                  Anonymous Reviews
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Mock reviews */}
-                <div className="space-y-4">
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        ))}
-                      </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">2 days ago</span>
-                    </div>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      "Really helped me work through my anxiety. {alias} has a gentle but effective approach. 
-                      The anonymous format made me feel more comfortable opening up."
-                    </p>
-                    <div className="text-xs text-gray-500 mt-2">— Anonymous Client</div>
-                  </div>
-                  
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        ))}
-                      </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">1 week ago</span>
-                    </div>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      "Practical strategies that I can actually use. Short sessions but very impactful. 
-                      The verification system gives me confidence in the quality."
-                    </p>
-                    <div className="text-xs text-gray-500 mt-2">— Anonymous Client</div>
-                  </div>
-                  
-                  <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex">
-                        {[...Array(4)].map((_, i) => (
-                          <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                        ))}
-                        <Star className="w-4 h-4 text-gray-300" />
-                      </div>
-                      <span className="text-sm text-gray-600 dark:text-gray-400">2 weeks ago</span>
-                    </div>
-                    <p className="text-gray-700 dark:text-gray-300">
-                      "Good session, though I would have liked a bit more time. The approach matches 
-                      what I was looking for. Will book again."
-                    </p>
-                    <div className="text-xs text-gray-500 mt-2">— Anonymous Client</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right Column - Booking */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Pricing Card */}
-            <Card className="border-0 bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 sticky top-24">
-              <CardHeader className="text-center">
-                <div className="text-3xl font-bold text-green-600 mb-2">
-                  {formatSui(5)}
-                </div>
-                <p className="text-gray-600 dark:text-gray-400">per 15-minute session</p>
-                <Badge variant="outline" className="mx-auto">
-                  <Zap className="w-3 h-3 mr-1" />
-                  Instant Booking
-                </Badge>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                {/* Available Time Slots */}
+        <div className="space-y-6">
+          {/* Header */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-semibold mb-3 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" />
-                    Available Today
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    {mockAvailableSlots.filter(slot => slot.available).slice(0, 8).map((slot) => (
-                      <Button
-                        key={slot.time}
-                        variant={selectedTimeSlot === slot.time ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setSelectedTimeSlot(slot.time)}
-                        className="text-xs"
-                      >
-                        {slot.time}
-                      </Button>
-                    ))}
+                  <CardTitle className="text-2xl mb-2">{therapist.full_name}</CardTitle>
+                  <div className="flex items-center gap-2">
+                    {therapist.is_verified ? (
+                      <Badge className="bg-green-100 text-green-800">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">
+                        <Clock className="w-3 h-3 mr-1" />
+                        Pending Verification
+                      </Badge>
+                    )}
+                    {isOwner && (
+                      <Badge variant="outline">Your Profile</Badge>
+                    )}
                   </div>
                 </div>
-
-                {/* Book Session Button */}
-                <Button 
-                  size="lg" 
-                  className="w-full"
-                  variant="gradient"
-                  disabled={!selectedTimeSlot}
-                  onClick={() => selectedTimeSlot && handleBookSession(selectedTimeSlot)}
-                >
-                  {selectedTimeSlot ? (
-                    <>Book Session at {selectedTimeSlot}</>
-                  ) : (
-                    "Select a time slot"
-                  )}
-                </Button>
-
-                {/* Session Info */}
-                <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-3 h-3" />
-                    15-minute focused sessions
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!therapist.is_verified && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center gap-2 text-yellow-800">
+                    <Clock className="w-4 h-4" />
+                    <h3 className="font-medium">Application Under Review</h3>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-3 h-3" />
-                    Anonymous & secure
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-3 h-3" />
-                    Video call via secure platform
-                  </div>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Your therapist application is being reviewed. You'll be notified once verification is complete.
+                  </p>
                 </div>
-
-                {/* Trust Indicators */}
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="text-center text-xs text-gray-600 dark:text-gray-400">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Shield className="w-4 h-4 text-green-500" />
-                      <span>Licensed & Verified</span>
-                    </div>
-                    <p>All therapists are verified through zk-proof credentials</p>
-                  </div>
+              )}
+              
+              {therapist.bio && (
+                <div>
+                  <h3 className="font-medium mb-2">About</h3>
+                  <p className="text-muted-foreground">{therapist.bio}</p>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Quick Stats */}
-            <Card className="border-0">
+          {/* Details */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Quick Stats</CardTitle>
+                <CardTitle className="text-lg">Professional Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Total Sessions:</span>
-                  <span className="font-semibold">{sessionStats.totalSessions}</span>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">License Number</label>
+                  <p>{therapist.license_number}</p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Average Rating:</span>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">{profile.rating}</span>
+                
+                {therapist.qualifications && Array.isArray(therapist.qualifications) && therapist.qualifications.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Qualifications</label>
+                    <p>{therapist.qualifications.join(', ')}</p>
                   </div>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Response Time:</span>
-                  <span className="font-semibold">{sessionStats.responseTime}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Completion Rate:</span>
-                  <span className="font-semibold text-green-600">{sessionStats.completionRate}%</span>
-                </div>
+                )}
+                
+                {therapist.years_of_experience && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Years of Experience</label>
+                    <p>{therapist.years_of_experience} years</p>
+                  </div>
+                )}
+                
+                {therapist.price_per_session && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">Price per Session</label>
+                    <p>{therapist.price_per_session} SUI</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Specializations & Styles</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {specializations.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">Specializations</label>
+                    <div className="flex flex-wrap gap-2">
+                      {specializations.map((spec) => (
+                        <Badge key={spec} variant="outline">
+                          {spec}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {therapist.therapy_styles && Array.isArray(therapist.therapy_styles) && therapist.therapy_styles.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">Therapy Styles</label>
+                    <div className="flex flex-wrap gap-2">
+                      {therapist.therapy_styles.map((style: string) => (
+                        <Badge key={style} variant="secondary">
+                          {style}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {therapist.languages_spoken && Array.isArray(therapist.languages_spoken) && therapist.languages_spoken.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground mb-2 block">Languages</label>
+                    <div className="flex flex-wrap gap-2">
+                      {therapist.languages_spoken.map((lang: string) => (
+                        <Badge key={lang} variant="outline">
+                          {lang}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

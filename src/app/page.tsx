@@ -35,7 +35,7 @@ export default function Home() {
                 </Link>
               </Button>
               <Button size="lg" variant="outline" className="border-glow hover:text-purple-400 transition-all duration-300" asChild>
-                <Link href="/marketplace">
+                <Link href="/therapist-onboarding">
                   Become a Therapist
                 </Link>
               </Button>
