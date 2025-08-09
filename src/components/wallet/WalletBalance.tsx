@@ -7,11 +7,9 @@ import { Card } from '../ui/card';
 export interface WalletBalanceProps {
   address?: string;
   balance?: string;
-  isLoading?: boolean;
-  error?: string | null;
 }
 
-export default function WalletBalance({ address, balance, isLoading = false, error }: WalletBalanceProps) {
+export default function WalletBalance({ address, balance }: WalletBalanceProps) {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -32,36 +30,26 @@ export default function WalletBalance({ address, balance, isLoading = false, err
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Wallet Address</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={copyToClipboard}
-          className="text-xs h-auto p-1 hover:bg-accent"
-        >
-          {copied ? (
-            <span className="text-green-400">Copied!</span>
-          ) : address ? (
-            <span className="font-mono">{formatAddress(address)}</span>
-          ) : (
-            <span className="text-muted-foreground">No Address</span>
-          )}
-        </Button>
+    <Card className="p-4">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-500">Wallet Address</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={copyToClipboard}
+            className="text-sm"
+          >
+            {copied ? 'Copied!' : address ? formatAddress(address) : 'No Address'}
+          </Button>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-500">Balance</span>
+          <span className="font-medium text-green-400">
+            {balance || '0.00'} SUI
+          </span>
+        </div>
       </div>
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Balance</span>
-        <span className="text-sm font-medium">
-          {isLoading ? (
-            <span className="animate-pulse text-blue-400">Loading...</span>
-          ) : error ? (
-            <span className="text-red-400 text-xs">Error</span>
-          ) : (
-            <span className="text-green-400">{`${balance || '0.0000'} SUI`}</span>
-          )}
-        </span>
-      </div>
-    </div>
+    </Card>
   );
 }

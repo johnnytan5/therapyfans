@@ -228,6 +228,7 @@ export default function TherapistBookingPage() {
           <CalendlyStyleAvailability
             therapistId={therapist.id}
             therapistWallet={therapist.wallet_address}
+            therapistPrice={therapist.price_per_session}
             initialSessions={sessions}
             onSessionsUpdated={(s) => setSessions(s)}
           />
