@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { generateMeetingLink, generateMeetingRoomId } from './meetingLinks';
+import { generateMeetingId, generateMeetingRoomId } from './meetingLinks';
 
 // Database interfaces matching our schema
 export interface AvailableSession {
@@ -12,6 +12,7 @@ export interface AvailableSession {
   price_sui: number;
   status: 'available' | 'booked' | 'cancelled' | 'completed';
   meeting_room_id: string;
+  meeting_link: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +110,7 @@ export class SessionService {
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
+        meeting_link: session.meeting_link,
       }));
     } catch (error) {
       console.error('Error in getAvailableSessionsByTherapist:', error);
@@ -156,6 +158,7 @@ export class SessionService {
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
+        meeting_link: session.meeting_link,
       }));
 
       console.log('🔍 SessionService: Mapped sessions:', mapped);
@@ -221,7 +224,7 @@ export class SessionService {
 
       // Generate NFT and meeting data
       const nftTokenId = `token-${sessionId}-${Math.random().toString(36).substr(2, 5)}`;
-      const meetingLink = generateMeetingLink(
+      const meetingId = generateMeetingId(
         sessionId,
         availableSession.therapist_wallet,
         availableSession.date,
@@ -245,7 +248,7 @@ export class SessionService {
         session_status: 'upcoming',
         nft_token_id: nftTokenId,
         meeting_room_id: availableSession.meeting_room_id,
-        meeting_link: meetingLink,
+        meeting_link: meetingId,
         booked_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -314,7 +317,7 @@ export class SessionService {
         price_sui: availableSession.price_sui,
         status: 'booked',
         nft_token_id: nftTokenId,
-        meeting_link: meetingLink,
+        meeting_link: meetingId,
         meeting_room_id: availableSession.meeting_room_id,
         client_wallet: bookingData.client_wallet,
         purchased_at: bookedSession.booked_at,

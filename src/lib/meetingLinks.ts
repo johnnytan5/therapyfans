@@ -16,10 +16,10 @@ export interface SessionNFT {
 }
 
 /**
- * Generate a deterministic meeting link based on session data
- * Uses a simple hash function for demo purposes
+ * Generate a unique meeting ID from session data
+ * Returns a longer, more unique identifier
  */
-export const generateMeetingLink = (
+export const generateMeetingId = (
   nftId: string,
   therapistWallet: string,
   sessionDate: string,
@@ -27,15 +27,41 @@ export const generateMeetingLink = (
 ): string => {
   const seed = `${nftId}-${therapistWallet}-${sessionDate}-${startTime}`;
   
-  // Simple hash function for demo (replace with crypto.subtle in production)
-  let hash = 0;
+  // Create multiple hash values for a longer ID
+  let hash1 = 0;
+  let hash2 = 0;
+  let hash3 = 0;
+  
   for (let i = 0; i < seed.length; i++) {
     const char = seed.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash1 = ((hash1 << 5) - hash1) + char;
+    hash2 = ((hash2 << 7) - hash2) + char;
+    hash3 = ((hash3 << 3) - hash3) + char;
+    hash1 = hash1 & hash1; // Convert to 32-bit integer
+    hash2 = hash2 & hash2;
+    hash3 = hash3 & hash3;
   }
   
-  const meetingId = Math.abs(hash).toString(16).padStart(8, '0').slice(0, 8);
+  // Combine hashes and add timestamp for uniqueness
+  const timestamp = Date.now().toString(36);
+  const combined = `${Math.abs(hash1).toString(16)}${Math.abs(hash2).toString(16)}${Math.abs(hash3).toString(16)}${timestamp}`;
+  
+  // Return a 24-character alphanumeric ID
+  return combined.slice(0, 24).toUpperCase();
+};
+
+/**
+ * Generate a deterministic meeting link based on session data
+ * Uses a simple hash function for demo purposes
+ * @deprecated Use generateMeetingId instead
+ */
+export const generateMeetingLink = (
+  nftId: string,
+  therapistWallet: string,
+  sessionDate: string,
+  startTime: string
+): string => {
+  const meetingId = generateMeetingId(nftId, therapistWallet, sessionDate, startTime);
   return `https://devmatch.com/session/${meetingId}`;
 };
 

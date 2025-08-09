@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { generateMeetingId } from './meetingLinks';
 
 export interface TherapistWithSpecializations {
   id: string;
@@ -29,6 +30,7 @@ export interface AvailableSession {
   end_time?: string | null;
   duration_minutes: number | null; // always 30 in your schema
   price_sui: number | null;
+  meeting_link?: string | null;
   created_at: string;
 }
 
@@ -102,6 +104,7 @@ export async function loadTherapistSessions(therapistId: string, therapistWallet
         end_time: end,
         duration_minutes: typeof duration === 'number' ? duration : (duration ? Number(duration) : null),
         price_sui: typeof price === 'number' ? price : (price ? Number(price) : null),
+        meeting_link: row.meeting_link ?? null,
         created_at: created,
       };
     };
@@ -175,6 +178,15 @@ export async function createAvailableSession(params: {
     const walletKey = (therapistWallet || '').replace(/^0x/, '').slice(-8);
     const slotId = `slot-${dateStr.replace(/-/g, '')}-${hh}${mm}-${walletKey}`;
     const priceValue = typeof params.priceSui === 'number' ? params.priceSui : 5; // ensure NOT NULL
+    
+    // Generate unique meeting ID for this session
+    const meetingId = generateMeetingId(
+      slotId,
+      therapistWallet,
+      dateStr,
+      startTime
+    );
+    
     // Try a few column variants to tolerate schema differences
     // Only use therapist_wallet since that's what your table has
     const payload = {
@@ -187,7 +199,7 @@ export async function createAvailableSession(params: {
       status: 'available',
       nft_token_id: null,
       meeting_room_id: meetingRoomId,
-      meeting_link: null,
+      meeting_link: meetingId,
       price_sui: priceValue,
       created_at: createdAt,
       updated_at: createdAt,
@@ -236,6 +248,7 @@ export async function createAvailableSession(params: {
         end_time: end,
         duration_minutes: 30,
         price_sui: data.price_sui ?? null,
+        meeting_link: data.meeting_link ?? null,
         created_at: data.created_at ?? createdAt,
       };
     }

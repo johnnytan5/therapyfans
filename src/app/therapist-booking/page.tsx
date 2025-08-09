@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
-import { Calendar, User, ChevronDown, ChevronUp, ArrowLeft, Clock } from "lucide-react";
+import { Calendar, User, ChevronDown, ChevronUp, ArrowLeft, Clock, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { getTimeUntilSession } from "@/lib/utils";
 import { loadTherapistSessions, TherapistSessionsResult } from "@/lib/therapistService";
@@ -22,6 +22,7 @@ export default function TherapistBookingPage() {
   const [sessions, setSessions] = useState<TherapistSessionsResult | null>(null);
   const [availableExpanded, setAvailableExpanded] = useState(true);
   const [bookedExpanded, setBookedExpanded] = useState(true);
+  const [revealedMeetingIds, setRevealedMeetingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function fetchTherapistData() {
@@ -60,6 +61,18 @@ export default function TherapistBookingPage() {
 
     fetchTherapistData();
   }, [account?.address]);
+
+  const toggleMeetingIdReveal = (sessionId: string) => {
+    setRevealedMeetingIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sessionId)) {
+        newSet.delete(sessionId);
+      } else {
+        newSet.add(sessionId);
+      }
+      return newSet;
+    });
+  };
 
   if (loading) {
     return (
@@ -162,16 +175,51 @@ export default function TherapistBookingPage() {
                           <div className="text-sm text-muted-foreground">No available slots yet.</div>
                         )}
                         {sessions.available.map((s) => (
-                          <div key={s.id} className="border rounded-lg p-3 flex items-center justify-between">
-                            <div>
-                              <div className="text-sm font-medium">
-                                {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(new Date(s.scheduled_at).toTimeString().slice(0, 8))}` : 'TBD'}
+                          <div key={s.id} className="border rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <div className="text-sm font-medium">
+                                  {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(new Date(s.scheduled_at).toTimeString().slice(0, 8))}` : 'TBD'}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {s.duration_minutes ? `${s.duration_minutes} min` : '30 min'} • {s.price_sui || 5} SUI
+                                </div>
                               </div>
-                              <div className="text-xs text-muted-foreground">
-                                {s.duration_minutes ? `${s.duration_minutes} min` : '30 min'} • {s.price_sui || 5} SUI
-                              </div>
+                              <Badge variant="outline">Open</Badge>
                             </div>
-                            <Badge variant="outline">Open</Badge>
+                            {s.meeting_link && (
+                              <div className="mt-2 p-3 bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg border border-purple-300 shadow-sm">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="text-xs text-purple-700 font-semibold flex items-center">
+                                    <div className="w-2 h-2 bg-purple-400 rounded-full mr-2"></div>
+                                    Meeting ID
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleMeetingIdReveal(s.id)}
+                                    className="h-6 px-3 text-xs bg-purple-100/60 hover:bg-purple-200/80 border border-purple-200 rounded-md"
+                                  >
+                                    {revealedMeetingIds.has(s.id) ? (
+                                      <>
+                                        <EyeOff className="w-3 h-3 mr-1 text-purple-600" />
+                                        Hide
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Eye className="w-3 h-3 mr-1 text-purple-600" />
+                                        Reveal
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                                {revealedMeetingIds.has(s.id) && (
+                                  <div className="text-xs text-purple-800 break-all font-mono bg-purple-50/80 p-2 rounded border border-purple-100">
+                                    {s.meeting_link}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -198,7 +246,7 @@ export default function TherapistBookingPage() {
                         )}
                         {sessions.booked.map((s) => (
                           <div key={s.id} className="border rounded-lg p-3">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between mb-2">
                               <div className="text-sm font-medium">
                                 {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(new Date(s.scheduled_at).toTimeString().slice(0, 8))}` : 'TBD'}
                               </div>
@@ -213,6 +261,39 @@ export default function TherapistBookingPage() {
                             {s.scheduled_at && (
                               <div className="mt-1 text-xs text-muted-foreground">
                                 {getTimeUntilSession(s.scheduled_at).timeLeft}
+                              </div>
+                            )}
+                            {s.meeting_link && (
+                              <div className="mt-2 p-3 bg-blue-100 rounded-lg border border-blue-300 shadow-sm">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="text-xs text-blue-700 font-semibold flex items-center">
+                                    <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+                                    Meeting ID
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleMeetingIdReveal(s.id)}
+                                    className="h-6 px-3 text-xs bg-blue-100/60 hover:bg-blue-200/80 border border-blue-200 rounded-md"
+                                  >
+                                    {revealedMeetingIds.has(s.id) ? (
+                                      <>
+                                        <EyeOff className="w-3 h-3 mr-1 text-blue-600" />
+                                        Hide
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Eye className="w-3 h-3 mr-1 text-blue-600" />
+                                        Reveal
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                                {revealedMeetingIds.has(s.id) && (
+                                  <div className="text-xs text-blue-800 break-all font-mono bg-blue-50/80 p-2 rounded border border-blue-100">
+                                    {s.meeting_link}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
