@@ -89,8 +89,8 @@ export async function loadTherapistSessions(therapistId: string, therapistWallet
       const dateStr: string | null = row.date || null;
       const startTime: string | null = row.start_time || null; // HH:MM:SS
       const endTime: string | null = row.end_time || null;
-      const start = dateStr && startTime ? new Date(`${dateStr}T${startTime}Z`).toISOString() : (row.scheduled_at || row.scheduled_time || null);
-      const end = dateStr && endTime ? new Date(`${dateStr}T${endTime}Z`).toISOString() : (endTime || (start ? new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString() : null));
+      const start = dateStr && startTime ? new Date(`${dateStr}T${startTime}`).toISOString() : (row.scheduled_at || row.scheduled_time || null);
+      const end = dateStr && endTime ? new Date(`${dateStr}T${endTime}`).toISOString() : (endTime || (start ? new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString() : null));
       const duration = row.duration_minutes ?? 30; // standard fixed duration
       const price = row.price_sui ?? row.price ?? null;
       const created = row.created_at ?? new Date().toISOString();
@@ -156,14 +156,17 @@ export async function createAvailableSession(params: {
     const createdAt = new Date().toISOString();
     const startISO = params.scheduledAt;
     const startDate = new Date(startISO);
-    // Build date (YYYY-MM-DD) and time (HH:MM:SS) parts to match table types
-    const dateStr = startDate.toISOString().slice(0, 10);
-    const hh = startDate.getUTCHours().toString().padStart(2, '0');
-    const mm = startDate.getUTCMinutes().toString().padStart(2, '0');
+    // Build date (YYYY-MM-DD) and time (HH:MM:SS) parts using local time (Malaysia timezone)
+    const year = startDate.getFullYear();
+    const month = (startDate.getMonth() + 1).toString().padStart(2, '0');
+    const day = startDate.getDate().toString().padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    const hh = startDate.getHours().toString().padStart(2, '0');
+    const mm = startDate.getMinutes().toString().padStart(2, '0');
     const startTime = `${hh}:${mm}:00`;
     const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
-    const eh = endDate.getUTCHours().toString().padStart(2, '0');
-    const em = endDate.getUTCMinutes().toString().padStart(2, '0');
+    const eh = endDate.getHours().toString().padStart(2, '0');
+    const em = endDate.getMinutes().toString().padStart(2, '0');
     const endTime = `${eh}:${em}:00`;
 
     const meetingRoomId = `room-${dateStr.replace(/-/g, '')}-${hh}${mm}`; // room-name-YYMMDD-time

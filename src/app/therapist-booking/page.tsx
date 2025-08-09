@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { Calendar, User, ChevronDown, ChevronUp, ArrowLeft, Clock } from "lucide-react";
 import Link from "next/link";
-import { formatDate, formatTime, getTimeUntilSession } from "@/lib/utils";
+import { getTimeUntilSession } from "@/lib/utils";
 import { loadTherapistSessions, TherapistSessionsResult } from "@/lib/therapistService";
 import { CalendlyStyleAvailability } from "@/components/therapy/CalendlyStyleAvailability";
+import { formatDate, formatTime } from "@/lib/meetingLinks";
 
 export default function TherapistBookingPage() {
   const account = useCurrentAccount();
@@ -164,7 +165,7 @@ export default function TherapistBookingPage() {
                           <div key={s.id} className="border rounded-lg p-3 flex items-center justify-between">
                             <div>
                               <div className="text-sm font-medium">
-                                {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(s.scheduled_at)}` : 'TBD'}
+                                {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(new Date(s.scheduled_at).toTimeString().slice(0, 8))}` : 'TBD'}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {s.duration_minutes ? `${s.duration_minutes} min` : '30 min'} • {s.price_sui || 5} SUI
@@ -199,7 +200,7 @@ export default function TherapistBookingPage() {
                           <div key={s.id} className="border rounded-lg p-3">
                             <div className="flex items-center justify-between">
                               <div className="text-sm font-medium">
-                                {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(s.scheduled_at)}` : 'TBD'}
+                                {s.scheduled_at ? `${formatDate(s.scheduled_at)} • ${formatTime(new Date(s.scheduled_at).toTimeString().slice(0, 8))}` : 'TBD'}
                               </div>
                               <Badge variant={((s.status || '').toLowerCase() === 'completed') ? 'secondary' : 'outline'}>
                                 {(s.status || 'scheduled').toString()}
