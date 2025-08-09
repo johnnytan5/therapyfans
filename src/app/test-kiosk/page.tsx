@@ -78,13 +78,13 @@ export default function TestKioskPage() {
     }
   };
 
-// Update createKioskWithSponsorship for the backend-only approach:
+// Update createKioskWithSponsorship to work with the updated backend
 const createKioskWithSponsorship = async () => {
   if (!account) return;
   startLoading("createKiosk");
 
   try {
-    console.log("Requesting sponsored kiosk creation...");
+    console.log("Requesting gas-sponsored kiosk creation...");
 
     const res = await fetch("/api/sponsor-kiosk", {
       method: "POST",
@@ -97,25 +97,23 @@ const createKioskWithSponsorship = async () => {
     const data = await res.json();
     console.log("Backend response:", data);
     
-    if (!res.ok) {
+    if (!res.ok || data.error) {
       throw new Error(data.error || `Backend error: ${res.status}`);
-    }
-    
-    if (data.error) {
-      throw new Error(data.error);
     }
 
     if (data.success) {
-      console.log("Kiosk created successfully:", data);
+      console.log("Kiosk created by backend with user attribution:", data);
       
       setLastCreatedKiosk({
         kioskId: data.kioskId,
         ownerCapId: data.ownerCapId,
         transactionDigest: data.transactionDigest,
-        gasSponsored: true
+        gasSponsored: true,
+        userAttribution: data.userAttribution,
+        exploreUrl: data.exploreUrl
       });
       
-      setSuccess("Kiosk created successfully with sponsored gas!");
+      setSuccess("Kiosk created successfully with sponsored gas and user attribution!");
       setShowSuccessModal(true);
       
       setTimeout(() => {
@@ -133,7 +131,6 @@ const createKioskWithSponsorship = async () => {
     endLoading("createKiosk");
   }
 };
-
   // Regular (non-sponsored) Kiosk Creation
   const createKioskRegular = async () => {
     if (!account) return;
@@ -424,16 +421,21 @@ const createKioskWithSponsorship = async () => {
               
               <div className="space-y-4">
                 {lastCreatedKiosk.gasSponsored && (
-                  <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                    <div className="flex items-center text-purple-700">
-                      <Zap className="w-4 h-4 mr-2" />
-                      <span className="font-medium">Gas fees sponsored!</span>
-                    </div>
-                    <p className="text-sm text-purple-600 mt-1">
-                      This kiosk creation was completely free for you.
-                    </p>
-                  </div>
-                )}
+  <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+    <div className="flex items-center text-purple-700">
+      <Zap className="w-4 h-4 mr-2" />
+      <span className="font-medium">Gas fees sponsored!</span>
+      {lastCreatedKiosk.userAttribution && (
+        <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+          ✓ User Attribution
+        </span>
+      )}
+    </div>
+    <p className="text-sm text-purple-600 mt-1">
+      This kiosk creation was completely free for you and includes proper creator attribution.
+    </p>
+  </div>
+)}
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
