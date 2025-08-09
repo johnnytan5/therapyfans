@@ -13,7 +13,8 @@ import {
   Search, 
   Calendar, 
   Menu,
-  X
+  X,
+  Coins
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -110,6 +111,17 @@ export function GlobalNavbar() {
 
           {/* Right Side Menu */}
           <div className="hidden md:flex items-center space-x-4">
+            <Button 
+              variant="gradient" 
+              size="sm" 
+              className="glow-purple hover:glow-purple transition-all duration-300" 
+              asChild
+            >
+              <Link href="/onramp" className="flex items-center gap-2">
+                <Coins className="w-4 h-4" />
+                Buy SUI
+              </Link>
+            </Button>
             <EnokiWalletConnect />
           </div>
 
@@ -150,9 +162,20 @@ export function GlobalNavbar() {
                 );
               })}
               
-              {/* Mobile Connect Wallet */}
+              {/* Mobile Buy SUI */}
               <div className="pt-4 border-t border-border">
-                <div className="px-3 py-2">
+                <div className="px-3 py-2 space-y-3">
+                  <Button 
+                    variant="gradient" 
+                    size="sm" 
+                    className="w-full glow-purple hover:glow-purple transition-all duration-300" 
+                    asChild
+                  >
+                    <Link href="/onramp" className="flex items-center justify-center gap-2">
+                      <Coins className="w-4 h-4" />
+                      Buy SUI
+                    </Link>
+                  </Button>
                   <EnokiWalletConnect />
                 </div>
               </div>
