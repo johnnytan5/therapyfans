@@ -16,7 +16,8 @@ import {
   Menu,
   X,
   Coins,
-  UserCheck
+  UserCheck,
+  CalendarCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -57,8 +58,18 @@ const getNavItems = (walletAddress?: string, therapistId?: string): NavItem[] =>
     });
   }
 
-  // Only add "My Sessions" if we have a wallet address to avoid duplicate /marketplace href
-  if (walletAddress) {
+  // Add "Manage Bookings" for therapists only
+  if (therapistId) {
+    baseItems.push({
+      label: "Manage Bookings",
+      href: "/therapist-booking",
+      icon: <CalendarCheck className="w-4 h-4" />,
+      isActive: (pathname) => pathname === "/therapist-booking"
+    });
+  }
+
+  // Only add "My Sessions" if we have a wallet address AND user is NOT a therapist
+  if (walletAddress && !therapistId) {
     baseItems.push({
       label: "My Sessions",
       href: `/client/${encodeURIComponent(walletAddress)}`,
