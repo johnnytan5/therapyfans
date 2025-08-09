@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 
 export interface TherapistWithSpecializations {
   id: string;
+  wallet_address: string;
   full_name: string;
   profile_picture_url: string | null;
   bio: string | null;
@@ -186,15 +187,37 @@ export async function createAvailableSession(params: {
       meeting_link: null,
       price_sui: priceValue,
       created_at: createdAt,
+      updated_at: createdAt,
     };
 
+    console.log('Attempting to insert payload:', payload);
+    
     const { data, error } = await supabase
       .from('available_sessions')
-      .upsert([payload], { onConflict: 'id' })
+      .upsert([payload])
       .select('*')
       .single();
     
+    console.log('Supabase response:', { data, error });
+    
+    if (error) {
+      console.error('Supabase error details:', error);
+    }
+    
     if (!error && data) {
+      // Verify the data was actually inserted by querying it back
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('available_sessions')
+        .select('*')
+        .eq('id', data.id)
+        .single();
+      
+      console.log('Verification query result:', { verifyData, verifyError });
+      
+      if (verifyError) {
+        console.error('Verification failed - data may not have been inserted:', verifyError);
+      }
+      
       // Normalize on the way out
       const start = data.date && data.start_time
         ? new Date(`${data.date}T${data.start_time}Z`).toISOString()

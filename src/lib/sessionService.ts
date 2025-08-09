@@ -124,23 +124,30 @@ export class SessionService {
       const today = new Date();
       const nextWeek = new Date();
       nextWeek.setDate(today.getDate() + 7);
+      const todayStr = today.toISOString().split('T')[0];
+      const nextWeekStr = nextWeek.toISOString().split('T')[0];
+
+      console.log('🔍 SessionService: Querying available sessions for therapist:', therapistWallet);
+      console.log('🔍 SessionService: Date range:', todayStr, 'to', nextWeekStr);
 
       const { data, error } = await supabase
         .from('available_sessions')
         .select('*')
         .eq('therapist_wallet', therapistWallet)
         .eq('status', 'available')
-        .gte('date', today.toISOString().split('T')[0])
-        .lte('date', nextWeek.toISOString().split('T')[0])
+        .gte('date', todayStr)
+        .lte('date', nextWeekStr)
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
+
+      console.log('🔍 SessionService: Raw query result:', { data, error });
 
       if (error) {
         console.error('Error fetching all available sessions:', error);
         return [];
       }
 
-      return (data || []).map((session: AvailableSession) => ({
+      const mapped = (data || []).map((session: AvailableSession) => ({
         id: session.id,
         therapist_wallet: session.therapist_wallet,
         date: session.date,
@@ -150,6 +157,9 @@ export class SessionService {
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
       }));
+
+      console.log('🔍 SessionService: Mapped sessions:', mapped);
+      return mapped;
     } catch (error) {
       console.error('Error in getAllAvailableSessionsForTherapist:', error);
       return [];
