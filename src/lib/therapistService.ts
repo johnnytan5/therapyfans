@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 
 export interface TherapistWithSpecializations {
   id: string;
+  wallet_address: string | null;
   full_name: string;
   profile_picture_url: string | null;
   bio: string | null;
@@ -89,6 +90,56 @@ export async function getTherapistById(id: string): Promise<TherapistWithSpecial
   } catch (error) {
     console.error('Error in getTherapistById:', error);
     return null;
+  }
+}
+
+export async function getTherapistByWalletAddress(walletAddress: string): Promise<TherapistWithSpecializations | null> {
+  try {
+    const { data, error } = await supabase
+      .from('therapists')
+      .select(`
+        *,
+        therapist_specializations!inner(
+          specializations(name)
+        )
+      `)
+      .eq('wallet_address', walletAddress)
+      .eq('is_verified', true)
+      .single();
+
+    if (error) {
+      console.error('Error fetching therapist by wallet:', error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      ...data,
+      specializations: data.therapist_specializations?.map((ts: any) => ts.specializations?.name).filter(Boolean) || [],
+      rating: typeof data.rating === 'number' && !Number.isNaN(data.rating)
+        ? data.rating
+        : null,
+      reviewCount: typeof data.review_count === 'number' && !Number.isNaN(data.review_count)
+        ? data.review_count
+        : null,
+    };
+  } catch (error) {
+    console.error('Error in getTherapistByWalletAddress:', error);
+    return null;
+  }
+}
+
+// Helper function to determine if an ID is a wallet address or UUID
+export function isWalletAddress(id: string): boolean {
+  return id.startsWith('0x') && id.length === 66; // Standard Sui address format
+}
+
+export async function getTherapistByIdOrWallet(identifier: string): Promise<TherapistWithSpecializations | null> {
+  if (isWalletAddress(identifier)) {
+    return getTherapistByWalletAddress(identifier);
+  } else {
+    return getTherapistById(identifier);
   }
 }
 

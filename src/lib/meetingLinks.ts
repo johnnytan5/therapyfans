@@ -6,6 +6,7 @@ export interface SessionNFT {
   date: string; // "2024-12-20"
   start_time: string; // "14:00"
   end_time: string; // "14:30"
+  duration_minutes: number; // 60
   price_sui: number; // 5.0
   status: 'available' | 'booked' | 'completed';
   nft_token_id?: string;
@@ -90,6 +91,7 @@ export const generateMockTimeSlots = (therapistWallet: string): SessionNFT[] => 
           date: dateString,
           start_time: startTime,
           end_time: endTime,
+          duration_minutes: 30, // Fixed duration for all mock slots
           price_sui: 5.0,
           status: isAvailable ? 'available' : 'booked',
           meeting_room_id: generateMeetingRoomId(nftId, therapistWallet, dateString, startTime),

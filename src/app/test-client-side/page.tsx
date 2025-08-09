@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar, Clock, User, Star, BookOpen, X, ExternalLink, Copy, CheckCircle } from 'lucide-react';
 
-const PACKAGE_ID = "0x7dee12dcb0e9afc507ef32e7741f18009f30ffbabe9fabdf53c2a4331793a76e";
+import { PACKAGE_ID, CONTRACT_FUNCTIONS } from '@/lib/suiConfig';
 
 interface TherapistNFT {
   id: string;

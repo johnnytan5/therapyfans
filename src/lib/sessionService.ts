@@ -48,6 +48,7 @@ export interface SessionNFT {
   date: string;
   start_time: string;
   end_time: string;
+  duration_minutes: number;
   price_sui: number;
   status: 'available' | 'booked' | 'completed';
   nft_token_id?: string;
