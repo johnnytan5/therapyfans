@@ -185,33 +185,7 @@ const createKiosk = async () => {
   }
 };
 
-  // Install rental extension in kiosk
-  const installRentalExtension = async (kioskId: string, capId: string) => {
-    if (!account) return;
-    startLoading("installExtension");
-    
-    try {
-      const tx = new Transaction();
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::install`,
-        arguments: [
-          tx.object(kioskId),
-          tx.object(capId),
-          tx.object("0x6")  // System transaction context
-        ],
-      });
-      
-      const result = await signAndExecuteTransaction({
-  transaction: tx.serialize(),
-
-});
-      
-      handleTxResult(result, "Install Extension");
-    } catch (e: any) {
-      setError(`Error installing extension: ${e.message}`);
-      endLoading("installExtension");
-    }
-  };
+  // Rental features removed; no extension installation is needed.
 
   // List a pre-minted NFT on a kiosk (standard kiosk: place + list)
   const listNftForSaleOnKiosk = async () => {
@@ -278,25 +252,13 @@ const createKiosk = async () => {
         tx.setGasBudget(50_000_000);
       }
 
-      // 1) Place the NFT into the kiosk
+      // Single entry call in your module: requires ownership, places then lists
       tx.moveCall({
-        target: `0x2::kiosk::place`,
-        typeArguments: [nftType],
+        target: `${PACKAGE_ID}::nft_rental::list_for_sale`,
         arguments: [
           tx.object(kioskId),
           tx.object(capId),
           tx.object(nftId),
-        ],
-      });
-
-      // 2) List the NFT for sale at the provided price
-      tx.moveCall({
-        target: `0x2::kiosk::list`,
-        typeArguments: [nftType],
-        arguments: [
-          tx.object(kioskId),
-          tx.object(capId),
-          tx.pure.id(nftId),
           tx.pure.u64(priceMist),
         ],
       });
@@ -400,240 +362,19 @@ const mintTherapistNft = async () => {
     endLoading("mintNft");
   }
 };
-  // List a therapist NFT for rental
-  const listTherapistService = async (nftId: string, kioskId: string, capId: string) => {
-    if (!account) return;
-    startLoading("listService");
+  // Rental features removed; use list_for_sale via listNftForSaleOnKiosk.
 
-    try {
-      // We would need the protected transfer policy ID, but for simplicity, we'll create a mock one
-      // In a real app, you'd fetch this from your backend or a registry
-      const mockProtectedTpId = "0x123"; // Replace with actual ID
-      
-      const tx = new Transaction();
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::list_therapist_service`,
-        arguments: [
-          tx.object(kioskId),
-          tx.object(capId),
-          tx.object(mockProtectedTpId),
-          tx.object(nftId),
-          tx.object("0x6")  // System transaction context
-        ],
-      });
+  // Rental features removed; delist/rent/borrow flows are not present in the simplified contract.
 
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "List Service");
-    } catch (e: any) {
-      setError(`Error listing service: ${e.message}`);
-      endLoading("listService");
-    }
-  };
+  // Rental features removed.
 
-  // Delist a therapist NFT from rental
-  const delistTherapistService = async (listingId: string, kioskId: string, capId: string) => {
-    if (!account) return;
-    startLoading("delistService");
+  // Rental features removed.
 
-    try {
-      // Mock transfer policy ID
-      const mockTransferPolicyId = "0x123"; // Replace with actual ID
-      
-      const tx = new Transaction();
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::delist_therapist_service`,
-        arguments: [
-          tx.object(kioskId),
-          tx.object(capId),
-          tx.object(mockTransferPolicyId),
-          tx.object(listingId),
-          tx.object("0x6")  // System transaction context
-        ],
-      });
+  // Rental features removed.
 
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "Delist Service");
-    } catch (e: any) {
-      setError(`Error delisting service: ${e.message}`);
-      endLoading("delistService");
-    }
-  };
+  // Rental features removed.
 
-  // Rent therapist service for 30 minutes
-  const rentTherapistService30Min = async (listingId: string, renterKioskId: string, borrowerKioskId: string) => {
-    if (!account) return;
-    startLoading("rentService30Min");
-
-    try {
-      // Mock rental policy ID
-      const mockRentalPolicyId = "0x123"; // Replace with actual ID
-      
-      const tx = new Transaction();
-      
-  // Create payment coin (5 SUI = 5,000,000,000 MIST)
-  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(5000000000)]);
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::rent_30_minutes`,
-        arguments: [
-          tx.object(renterKioskId),
-          tx.object(borrowerKioskId),
-          tx.object(mockRentalPolicyId),
-          tx.object(listingId),
-          coin,
-          tx.object("0x6"),  // Clock object ID
-          tx.object("0x6")   // System transaction context
-        ],
-      });
-
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "Rent Service (30 min)");
-    } catch (e: any) {
-      setError(`Error renting service: ${e.message}`);
-      endLoading("rentService30Min");
-    }
-  };
-
-  // Rent therapist service for 1 hour
-  const rentTherapistService1Hour = async (listingId: string, renterKioskId: string, borrowerKioskId: string) => {
-    if (!account) return;
-    startLoading("rentService1Hour");
-
-    try {
-      // Mock rental policy ID
-      const mockRentalPolicyId = "0x123"; // Replace with actual ID
-      
-      const tx = new Transaction();
-      
-  // Create payment coin (10 SUI = 10,000,000,000 MIST)
-  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(10000000000)]);
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::rent_1_hour`,
-        arguments: [
-          tx.object(renterKioskId),
-          tx.object(borrowerKioskId),
-          tx.object(mockRentalPolicyId),
-          tx.object(listingId),
-          coin,
-          tx.object("0x6"),  // Clock object ID
-          tx.object("0x6")   // System transaction context
-        ],
-      });
-
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "Rent Service (1 hour)");
-    } catch (e: any) {
-      setError(`Error renting service: ${e.message}`);
-      endLoading("rentService1Hour");
-    }
-  };
-
-  // Borrow NFT by reference for immutable access
-  const borrowNft = async (nftId: string, kioskId: string, capId: string) => {
-    if (!account) return;
-    startLoading("borrowNft");
-
-    try {
-      const tx = new Transaction();
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::borrow`,
-        arguments: [
-          tx.object(kioskId),
-          tx.object(capId),
-          tx.object(nftId),
-          tx.object("0x6")  // System transaction context
-        ],
-      });
-
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "Borrow NFT");
-    } catch (e: any) {
-      setError(`Error borrowing NFT: ${e.message}`);
-      endLoading("borrowNft");
-    }
-  };
-
-  // Start a session - borrow NFT by value
-  const startSession = async (nftId: string, kioskId: string, capId: string) => {
-    if (!account) return;
-    startLoading("startSession");
-
-    try {
-      const tx = new Transaction();
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::borrow_val`,
-        arguments: [
-          tx.object(kioskId),
-          tx.object(capId),
-          tx.object(nftId),
-          tx.object("0x6")  // System transaction context
-        ],
-      });
-
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "Start Session");
-    } catch (e: any) {
-      setError(`Error starting session: ${e.message}`);
-      endLoading("startSession");
-    }
-  };
-
-  // Reclaim NFT after session expires
-  const reclaimNft = async (nftId: string, renterKioskId: string, borrowerKioskId: string) => {
-    if (!account) return;
-    startLoading("reclaimNft");
-
-    try {
-      // Mock transfer policy ID
-      const mockTransferPolicyId = "0x123"; // Replace with actual ID
-      
-      const tx = new Transaction();
-      
-      tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::reclaim`,
-        arguments: [
-          tx.object(renterKioskId),
-          tx.object(borrowerKioskId),
-          tx.object(mockTransferPolicyId),
-          tx.object("0x6"), // Clock object ID
-          tx.object(nftId),
-          tx.object("0x6")  // System transaction context
-        ],
-      });
-
-      const result = await signAndExecuteTransaction({
-        transaction: tx.serialize(), // Convert TransactionBlock to serialized format
-      });
-      
-      handleTxResult(result, "Reclaim NFT");
-    } catch (e: any) {
-      setError(`Error reclaiming NFT: ${e.message}`);
-      endLoading("reclaimNft");
-    }
-  };
+  // Rental features removed.
 
   // Fetch user's kiosks
   const fetchUserKiosks = async () => {
@@ -985,24 +726,7 @@ const mintTherapistNft = async () => {
                                 </Badge>
                               )}
                             </div>
-                            {!kiosk.hasExtension && (
-                              <Button
-                                size="sm" 
-                                variant="outline"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  installRentalExtension(kiosk.id, kiosk.cap);
-                                }}
-                                disabled={loading.installExtension}
-                              >
-                                {loading.installExtension ? (
-                                  <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                ) : (
-                                  <Plus className="w-3 h-3 mr-1" />
-                                )}
-                                Install Extension
-                              </Button>
-                            )}
+                            {/* Extension install removed in simplified buy/sell flow */}
                           </div>
                         </div>
                       ))}
@@ -1230,21 +954,17 @@ const mintTherapistNft = async () => {
                                 variant="outline"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Find kiosk cap from selected kiosk
                                   const kiosk = userKiosks.find(k => k.id === selectedKiosk);
                                   if (kiosk) {
-                                    listTherapistService(nft.id, selectedKiosk, kiosk.cap);
+                                    setPremintedNftId(nft.id);
+                                    setKioskIdInput(kiosk.id);
+                                    setKioskCapIdInput(kiosk.cap);
                                   }
                                 }}
-                                disabled={loading.listService}
                                 className="ml-auto"
                               >
-                                {loading.listService ? (
-                                  <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                ) : (
-                                  <ShoppingBag className="w-3 h-3 mr-1" />
-                                )}
-                                List Service
+                                <ShoppingBag className="w-3 h-3 mr-1" />
+                                Fill Listing Form
                               </Button>
                             )}
                           </div>
@@ -1301,82 +1021,7 @@ const mintTherapistNft = async () => {
                               {formatAddress(listing.id)}
                             </Badge>
 
-                            {selectedListing === listing.id && (
-                              <div className="flex gap-2">
-                                {/* For therapist (delist) */}
-                                {userNfts.some(nft => nft.id === listing.nftId) && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Find kiosk cap from kiosk ID
-                                      const kiosk = userKiosks.find(k => k.id === listing.kioskId);
-                                      if (kiosk) {
-                                        delistTherapistService(listing.id, listing.kioskId, kiosk.cap);
-                                      }
-                                    }}
-                                    disabled={loading.delistService}
-                                  >
-                                    {loading.delistService ? (
-                                      <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="w-3 h-3 mr-1" />
-                                    )}
-                                    Delist
-                                  </Button>
-                                )}
-
-                                {/* For client (rent) */}
-                                {selectedKiosk && !userNfts.some(nft => nft.id === listing.nftId) && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        rentTherapistService30Min(
-                                          listing.id, 
-                                          listing.kioskId, 
-                                          selectedKiosk
-                                        );
-                                      }}
-                                      disabled={loading.rentService30Min}
-                                      className="border-green-500/30 text-green-500"
-                                    >
-                                      {loading.rentService30Min ? (
-                                        <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                      ) : (
-                                        <Clock className="w-3 h-3 mr-1" />
-                                      )}
-                                      Rent 30min
-                                    </Button>
-                                    
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        rentTherapistService1Hour(
-                                          listing.id, 
-                                          listing.kioskId, 
-                                          selectedKiosk
-                                        );
-                                      }}
-                                      disabled={loading.rentService1Hour}
-                                      className="border-blue-500/30 text-blue-500"
-                                    >
-                                      {loading.rentService1Hour ? (
-                                        <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                      ) : (
-                                        <Calendar className="w-3 h-3 mr-1" />
-                                      )}
-                                      Rent 1hr
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                            {/* Actions removed in simplified buy/sell flow */}
                           </div>
                         </div>
                       </div>
@@ -1386,102 +1031,7 @@ const mintTherapistNft = async () => {
               </CardContent>
             </Card>
 
-            {/* Active/Rented Services */}
-            <Card className="border-0 glass border-glow hover:glow-purple">
-              <CardHeader>
-                <CardTitle>Your Active Sessions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {rentedServices.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">
-                    No active sessions. Rent a therapy service to get started.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {rentedServices.map(session => (
-                      <div 
-                        key={session.id}
-                        className={`p-4 rounded-lg border ${selectedService === session.id 
-                          ? 'border-purple-500/50 bg-purple-500/10' 
-                          : 'border-border bg-secondary/50'}`}
-                        onClick={() => setSelectedService(session.id === selectedService ? null : session.id)}
-                      >
-                        <div className="flex justify-between">
-                          <div>
-                            <h3 className="font-medium">{session.name}</h3>
-                            <p className="text-sm text-muted-foreground">{session.specialization}</p>
-                            
-                            <div className="flex items-center gap-4 mt-2">
-                              <Badge variant={session.active ? "default" : "secondary"} className="bg-green-500/20 text-green-400 border-green-500/30">
-                                {session.active ? "Active Now" : "Session Ended"}
-                              </Badge>
-                              <div className="text-sm">
-                                <span className="text-muted-foreground">Duration:</span>{" "}
-                                <span className="font-medium">{session.sessionType === 1 ? "30min" : "1hr"}</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col items-end gap-2">
-                            <Badge variant="outline" className="font-mono">
-                              {formatAddress(session.id)}
-                            </Badge>
-
-                            {selectedService === session.id && selectedKiosk && (
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Start session with therapist
-                                    const kiosk = userKiosks.find(k => k.id === selectedKiosk);
-                                    if (kiosk) {
-                                      startSession(session.nftId, selectedKiosk, kiosk.cap);
-                                    }
-                                  }}
-                                  disabled={loading.startSession || !session.active}
-                                >
-                                  {loading.startSession ? (
-                                    <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                  ) : (
-                                    <ArrowRight className="w-3 h-3 mr-1" />
-                                  )}
-                                  Start Session
-                                </Button>
-                                
-                                {!session.active && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Reclaim NFT after session ends (for therapist)
-                                      // We'd need renter kiosk ID and borrower kiosk ID
-                                      const renterKioskId = "0x123456"; // Mock ID
-                                      reclaimNft(session.nftId, renterKioskId, selectedKiosk);
-                                    }}
-                                    disabled={loading.reclaimNft || session.active}
-                                    className="border-red-500/30 text-red-400"
-                                  >
-                                    {loading.reclaimNft ? (
-                                      <Clock className="w-3 h-3 mr-1 animate-spin" />
-                                    ) : (
-                                      <Check className="w-3 h-3 mr-1" />
-                                    )}
-                                    Reclaim NFT
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Rental features removed; active sessions section omitted */}
 
             {/* Transaction History */}
             {transactions.length > 0 && (
