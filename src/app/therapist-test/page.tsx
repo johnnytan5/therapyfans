@@ -10,8 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-
-const PACKAGE_ID = "0x7dee12dcb0e9afc507ef32e7741f18009f30ffbabe9fabdf53c2a4331793a76e";
+import { PACKAGE_ID, CONTRACT_FUNCTIONS, SUI_TYPES } from '@/lib/suiConfig';
 const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') }); // or 'mainnet'
 
 
@@ -118,7 +117,7 @@ const copyToClipboard = async (text: string) => {
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PACKAGE_ID}::therapist_nft::mint`,
+        target: CONTRACT_FUNCTIONS.mintTherapistNft,
         arguments: [
             tx.pure.string(nftForm.name),
             tx.pure.string(nftForm.specialization),
@@ -181,7 +180,7 @@ const copyToClipboard = async (text: string) => {
     const ownedObjects = await suiClient.getOwnedObjects({
       owner: account.address,
       filter: {
-        StructType: `${PACKAGE_ID}::therapist_nft::TherapistNFT`
+        StructType: SUI_TYPES.therapistNft
       },
       options: {
         showContent: true,

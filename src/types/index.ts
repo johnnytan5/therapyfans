@@ -112,3 +112,60 @@ export interface VibeTag {
   category: 'style' | 'specialty' | 'approach';
   color: string;
 }
+
+// Sui Blockchain Types for Therapist NFT Integration
+export interface SuiObjectResponse {
+  data?: {
+    objectId: string;
+    type: string;
+    content?: {
+      dataType: string;
+      type: string;
+      fields: Record<string, any>;
+    };
+  };
+}
+
+export interface KioskOwnerCap {
+  objectId: string;
+  type: string;
+  fields: {
+    kiosk: string;
+  };
+}
+
+export interface TherapistNFTOnChain {
+  objectId: string;
+  type: string;
+  fields: {
+    id: { id: string };
+    name: string | number[];
+    specialization: string | number[];
+    credentials: string | number[];
+    years_experience: string;
+    bio: string | number[];
+    session_types: string | number[];
+    languages: string | number[];
+    rating: string;
+    total_sessions: string;
+    profile_image_url: string | number[];
+    certification_url: string | number[];
+  };
+}
+
+export interface TherapistNFTData {
+  therapistId: string;
+  nftDetails: {
+    name: string;
+    specialization: string;
+    credentials: string;
+    years_experience: number;
+    bio: string;
+    session_types: string;
+    languages: string;
+    rating: number;
+    total_sessions: number;
+    profile_image_url: string;
+    certification_url: string;
+  };
+}
