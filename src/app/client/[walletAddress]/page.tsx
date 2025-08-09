@@ -20,6 +20,9 @@ import {
   ArrowLeft, 
   Shield, 
   Eye, 
+  EyeOff,
+  Copy,
+  CheckCircle,
   Settings,
   Zap,
   TrendingUp,
@@ -50,6 +53,8 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
   const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const { client: authClient, isAuthenticated, wallet_address } = useClientProfile();
   const loadingRef = useRef(false);
+  const [revealedMeetingIds, setRevealedMeetingIds] = useState<Set<string>>(new Set());
+  const [copiedMeetingFor, setCopiedMeetingFor] = useState<string>("");
 
   // Debug: Track renders
   console.log('🔄 ClientProfilePage render:', {
@@ -163,6 +168,26 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
 
     loadRecommendedTherapists();
   }, [clientProfile]);
+
+  const toggleMeetingIdReveal = (sessionId: string) => {
+    setRevealedMeetingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  };
+
+  const copyMeetingIdentifier = async (meetingIdOrRoom: { meetingId?: string | null; roomId?: string }) => {
+    const identifier = meetingIdOrRoom.meetingId ?? meetingIdOrRoom.roomId ?? '';
+    try {
+      await navigator.clipboard.writeText(identifier);
+      setCopiedMeetingFor(identifier);
+      setTimeout(() => setCopiedMeetingFor(""), 2000);
+    } catch (e) {
+      console.error('Failed to copy meeting identifier:', e);
+    }
+  };
   
   if (!resolvedParams || isLoadingProfile) {
     return <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid pt-20 flex items-center justify-center">
@@ -438,10 +463,54 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                                     {timeLeft}
                                   </div>
                                   <Button size="sm" asChild>
-                                    <Link href={session.meeting_link || `/session/${session.meeting_room_id}`}>
+                                    <Link href={session.meeting_link ? `/session/${session.meeting_link}` : `/session/room/${session.meeting_room_id}`}>
                                       {isToday ? "Join Session" : "View Details"}
                                     </Link>
                                   </Button>
+                                  {/* Revealable Meeting Link */}
+                                  <div className="mt-2 text-left">
+                                    <div className="text-xs text-purple-700 font-semibold flex items-center">
+                                      <div className="w-2 h-2 bg-purple-400 rounded-full mr-2"></div>
+                                      Meeting ID
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => toggleMeetingIdReveal(session.id)}
+                                        className="ml-2 h-6 px-3 text-xs bg-purple-100/60 hover:bg-purple-200/80 border border-purple-200 rounded-md"
+                                      >
+                                        {revealedMeetingIds.has(session.id) ? (
+                                          <>
+                                            <EyeOff className="w-3 h-3 mr-1 text-purple-600" />
+                                            Hide
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Eye className="w-3 h-3 mr-1 text-purple-600" />
+                                            Reveal
+                                          </>
+                                        )}
+                                      </Button>
+                                      {revealedMeetingIds.has(session.id) && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => copyMeetingIdentifier({ meetingId: session.meeting_link, roomId: session.meeting_room_id })}
+                                          className="ml-2 h-6 px-2"
+                                        >
+                                          {copiedMeetingFor && copiedMeetingFor === (session.meeting_link || session.meeting_room_id) ? (
+                                            <CheckCircle className="w-3 h-3 text-green-400" />
+                                          ) : (
+                                            <Copy className="w-3 h-3" />
+                                          )}
+                                        </Button>
+                                      )}
+                                    </div>
+                                    {revealedMeetingIds.has(session.id) && (
+                                      <div className="text-xs text-purple-800 break-all font-mono bg-purple-50/80 p-2 rounded border border-purple-100 mt-1">
+                                        {session.meeting_link || session.meeting_room_id}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </CardContent>
