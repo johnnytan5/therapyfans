@@ -550,7 +550,7 @@ const mintTherapistNftSponsored = async () => {
                               <Copy className="w-3 h-3" />
                             </button>
                             <a
-                              href={`https://suiscan.xyz/mainnet/tx/${transactionResults.kioskTx}`}
+                              href={`https://suiscan.xyz/testnet/tx/${transactionResults.kioskTx}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
@@ -582,7 +582,7 @@ const mintTherapistNftSponsored = async () => {
                               <Copy className="w-3 h-3" />
                             </button>
                             <a
-                              href={`https://suiscan.xyz/mainnet/tx/${transactionResults.nftTx}`}
+                              href={`https://suiscan.xyz/testnet/tx/${transactionResults.nftTx}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
