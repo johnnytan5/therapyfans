@@ -8,7 +8,7 @@ import { TherapistCard } from "@/components/therapy/TherapistCard";
 import { VibeTag } from "@/components/therapy/VibeTag";
 import { ClientPreferencesForm } from "@/components/therapy/ClientPreferencesForm";
 import { AIMatchResults } from "@/components/therapy/AIMatchResults";
-import { Search, Filter, Star, Shield, ArrowLeft, Sparkles, ArrowRight } from "lucide-react";
+import { Search, Filter, Star, Shield, ArrowLeft, Sparkles, ArrowRight, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { getTherapists, TherapistWithSpecializations } from "@/lib/therapistService";
 import { matchClientWithTherapists, ClientPreferences, TherapistMatch } from "@/lib/aiMatchmaking";
@@ -20,6 +20,7 @@ export default function MarketplacePage() {
   const [minRating, setMinRating] = useState(0);
   const [therapists, setTherapists] = useState<TherapistWithSpecializations[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   
   // AI Matchmaking states
   const [matches, setMatches] = useState<TherapistMatch[]>([]);
@@ -101,6 +102,15 @@ export default function MarketplacePage() {
     );
   };
 
+  // Calculate active filters count
+  const activeFiltersCount = selectedSpecialties.length + (minRating > 0 ? 1 : 0) + (searchQuery ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedSpecialties([]);
+    setMinRating(0);
+  };
+
   // AI Matchmaking handlers
   const handlePreferencesSubmit = async (preferences: ClientPreferences) => {
     setMatchmakingLoading(true);
@@ -176,143 +186,140 @@ export default function MarketplacePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Search and Filters */}
-        <div className="mb-8 space-y-6">
-          {/* Search Bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input
-              placeholder="Search therapists by name, specialization, or approach..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 h-12 text-lg border-glow"
-            />
+        {/* Search and Collapsible Filters */}
+        <div className="mb-8 space-y-4">
+          {/* Search Bar and Filter Toggle */}
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input
+                placeholder="Search therapists by name, specialization, or approach..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-12 text-lg border-glow"
+              />
+            </div>
+            
+            {/* Filter Toggle Button */}
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => setFiltersExpanded(!filtersExpanded)}
+              className="h-12 px-4 border-glow hover:glow-purple transition-all duration-300"
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+              {activeFiltersCount > 0 && (
+                <Badge variant="secondary" className="ml-2 px-2 py-0 text-xs bg-purple-500/20 text-purple-300">
+                  {activeFiltersCount}
+                </Badge>
+              )}
+              {filtersExpanded ? (
+                <ChevronUp className="w-4 h-4 ml-2" />
+              ) : (
+                <ChevronDown className="w-4 h-4 ml-2" />
+              )}
+            </Button>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-purple-400" />
-              <span className="text-sm font-medium text-foreground">
-                Filters:
-              </span>
-            </div>
+          {/* Collapsible Filters Panel */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${
+            filtersExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+          }`}>
+            <div className="glass rounded-lg border-glow p-6 space-y-6">
+              {/* Sort and Rating Row */}
+              <div className="flex flex-wrap items-center gap-6">
+                {/* Sort Options */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-muted-foreground">Sort:</span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={sortBy === "rating" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSortBy("rating")}
+                    >
+                      <Star className="w-3 h-3 mr-1" />
+                      Rating
+                    </Button>
+                    <Button
+                      variant={sortBy === "name" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setSortBy("name")}
+                    >
+                      Name
+                    </Button>
+                  </div>
+                </div>
 
-            {/* Sort Options */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Sort by:</span>
-              <Button
-                variant={sortBy === "rating" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSortBy("rating")}
-              >
-                <Star className="w-3 h-3 mr-1" />
-                Rating
-              </Button>
-              <Button
-                variant={sortBy === "name" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSortBy("name")}
-              >
-                Name
-              </Button>
-            </div>
-
-            {/* Rating Filter */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Min Rating:</span>
-              <div className="flex gap-1">
-                {[0, 4, 4.5].map(rating => (
-                  <Button
-                    key={rating}
-                    variant={minRating === rating ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setMinRating(rating)}
-                  >
-                    {rating === 0 ? "All" : `${rating}+`}
-                    <Star className="w-3 h-3 ml-1" />
-                  </Button>
-                ))}
+                {/* Rating Filter */}
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-muted-foreground">Min Rating:</span>
+                  <div className="flex gap-2">
+                    {[0, 4, 4.5].map(rating => (
+                      <Button
+                        key={rating}
+                        variant={minRating === rating ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setMinRating(rating)}
+                      >
+                        {rating === 0 ? "All" : `${rating}+`}
+                        <Star className="w-3 h-3 ml-1" />
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              {/* Specializations */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-foreground">Specializations:</h4>
+                <div className="flex flex-wrap gap-2">
+                  {allSpecializations.map(specialty => (
+                    <Badge
+                      key={specialty}
+                      variant={selectedSpecialties.includes(specialty) ? "default" : "outline"}
+                      className="cursor-pointer hover:bg-primary/10 transition-colors"
+                      onClick={() => toggleSpecialty(specialty)}
+                    >
+                      {specialty}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Active Filters & Clear All */}
+              {activeFiltersCount > 0 && (
+                <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Active:</span>
+                    {searchQuery && (
+                      <Badge variant="secondary" className="text-xs">
+                        Search: "{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}"
+                      </Badge>
+                    )}
+                    {selectedSpecialties.length > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {selectedSpecialties.length} specialization{selectedSpecialties.length > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                    {minRating > 0 && (
+                      <Badge variant="secondary" className="text-xs">
+                        {minRating}+ rating
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Specialization Filters */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-foreground">
-              Filter by Specialization:
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {allSpecializations.map(specialty => (
-                <Badge
-                  key={specialty}
-                  variant={selectedSpecialties.includes(specialty) ? "default" : "outline"}
-                  className="cursor-pointer hover:bg-primary/10 transition-colors"
-                  onClick={() => toggleSpecialty(specialty)}
-                >
-                  {specialty}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {/* Active Filters Display */}
-          {(selectedSpecialties.length > 0 || minRating > 0 || searchQuery) && (
-            <div className="flex flex-wrap items-center gap-2 p-4 glass rounded-lg border-glow">
-              <span className="text-sm font-medium text-foreground">
-                Active filters:
-              </span>
-              
-              {searchQuery && (
-                <Badge variant="secondary">
-                  Search: "{searchQuery}"
-                  <button 
-                    onClick={() => setSearchQuery("")}
-                    className="ml-1 hover:text-red-500"
-                  >
-                    ×
-                  </button>
-                </Badge>
-              )}
-              
-              {selectedSpecialties.map(specialty => (
-                <Badge key={specialty} variant="secondary">
-                  {specialty}
-                  <button 
-                    onClick={() => toggleSpecialty(specialty)}
-                    className="ml-1 hover:text-red-500"
-                  >
-                    ×
-                  </button>
-                </Badge>
-              ))}
-              
-              {minRating > 0 && (
-                <Badge variant="secondary">
-                  Rating: {minRating}+
-                  <button 
-                    onClick={() => setMinRating(0)}
-                    className="ml-1 hover:text-red-500"
-                  >
-                    ×
-                  </button>
-                </Badge>
-              )}
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedSpecialties([]);
-                  setMinRating(0);
-                }}
-                className="ml-2"
-              >
-                Clear All
-              </Button>
-            </div>
-          )}
         </div>
 
         {/* Results */}
@@ -324,7 +331,7 @@ export default function MarketplacePage() {
             
             {filteredTherapists.length > 0 && (
               <div className="text-sm text-muted-foreground">
-                Starting from <span className="font-semibold text-green-400">5.00 SUI</span> per 15min session
+                Starting from <span className="font-semibold text-green-400">5.00 SUI</span> per 30min session
               </div>
             )}
           </div>
@@ -337,8 +344,8 @@ export default function MarketplacePage() {
                   key={therapist.id}
                   therapist={therapist}
                   onBookSession={() => {
-                    // Navigate to therapist profile or purchase page
-                    window.location.href = `/purchase/session-${therapist.id}`;
+                    // Navigate to wallet-based booking page
+                    window.location.href = `/marketplace/${therapist.id}`;
                   }}
                 />
               ))}
@@ -389,7 +396,7 @@ export default function MarketplacePage() {
             </div>
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-green transition-all duration-300">
               <div className="text-2xl font-bold text-green-400">5.00 SUI</div>
-              <div className="text-sm text-muted-foreground">Per 15min Session</div>
+              <div className="text-sm text-muted-foreground">Per 30min Session</div>
             </div>
           </div>
         </div>

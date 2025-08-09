@@ -9,9 +9,9 @@ interface VibeTagProps {
 }
 
 const categoryColors = {
-  style: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  specialty: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300", 
-  approach: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  style: "bg-blue-500/10 text-blue-300 border-blue-500/30 hover:bg-blue-500/20 hover:border-blue-400/50",
+  specialty: "bg-green-500/10 text-green-300 border-green-500/30 hover:bg-green-500/20 hover:border-green-400/50", 
+  approach: "bg-purple-500/10 text-purple-300 border-purple-500/30 hover:bg-purple-500/20 hover:border-purple-400/50",
 };
 
 export function VibeTag({ tag, variant = "default", className }: VibeTagProps) {
@@ -32,7 +32,11 @@ export function VibeTag({ tag, variant = "default", className }: VibeTagProps) {
     return (
       <Badge 
         variant="outline" 
-        className={cn("text-xs", className)}
+        className={cn(
+          "text-xs transition-all duration-200 hover:scale-105 cursor-default",
+          "bg-background/50 hover:bg-primary/10 border-border hover:border-primary/30",
+          className
+        )}
       >
         {tagName}
       </Badge>
@@ -42,7 +46,7 @@ export function VibeTag({ tag, variant = "default", className }: VibeTagProps) {
   return (
     <Badge 
       className={cn(
-        "text-xs border-0",
+        "text-xs border transition-all duration-200 hover:scale-105 cursor-default",
         colorClass,
         className
       )}
