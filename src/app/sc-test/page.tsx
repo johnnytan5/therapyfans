@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 // Constants
-const PACKAGE_ID = "0xa6bcab787aa5ec915106c417531299c064c0acf028fee90a3ac72717421d0793";
+const PACKAGE_ID = "0x4257be6ae1a26a4bc491ca2d4db672678c3c50bee810efa8e6c34cf3cfa135c3";
 const NETWORK = "testnet";
 const EXPLORER_URL = "https://suiscan.xyz/testnet";
 
@@ -56,6 +56,14 @@ const specificWalletAddress = "0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba
   const [kioskCapIdInput, setKioskCapIdInput] = useState<string>("");
   const [listPriceSui, setListPriceSui] = useState<string>("1");
   const [listTxDigest, setListTxDigest] = useState<string | null>(null);
+  // Buy from kiosk form state
+  const [buyItemId, setBuyItemId] = useState<string>("");
+  const [buyKioskId, setBuyKioskId] = useState<string>("");
+  const [buyPolicyId, setBuyPolicyId] = useState<string>(process.env.NEXT_PUBLIC_TRANSFER_POLICY_ID || "");
+  const [buyPriceSui, setBuyPriceSui] = useState<string>("");
+  const [buyTxDigest, setBuyTxDigest] = useState<string | null>(null);
+  // 
+  
 
   // NFT mint form state
   const [nftForm, setNftForm] = useState({
@@ -97,6 +105,12 @@ const specificWalletAddress = "0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba
   // Helper function to end loading state
   const endLoading = (operation: string) => {
     setLoading(prev => ({ ...prev, [operation]: false }));
+  };
+
+  // Basic 0x-hex object id validator (1-64 hex chars after 0x)
+  const isValidObjectId = (value: string | undefined | null): boolean => {
+    const v = (value || "").trim();
+    return /^0x[0-9a-fA-F]{1,64}$/.test(v);
   };
 
   // Convert SUI (string, allows decimals) to MIST (u64 bigint)
@@ -201,7 +215,21 @@ const createKiosk = async () => {
       const nftId = premintedNftId.trim();
       const kioskId = kioskIdInput.trim();
       const capId = kioskCapIdInput.trim();
-      const obj = await suiClient.getObject({
+
+      // Early validation for common copy/paste mistakes
+      if (!isValidObjectId(nftId)) {
+        throw new Error(`Invalid NFT Object ID format. Expected 0x-prefixed hex, got: ${nftId || '<empty>'}`);
+      }
+      if (!isValidObjectId(kioskId)) {
+        throw new Error(`Invalid Kiosk ID format. Expected 0x-prefixed hex, got: ${kioskId || '<empty>'}`);
+      }
+      if (!isValidObjectId(capId)) {
+        throw new Error(`Invalid Kiosk OwnerCap ID format. Expected 0x-prefixed hex, got: ${capId || '<empty>'}`);
+      }
+      if (kioskId.toLowerCase() === capId.toLowerCase()) {
+        throw new Error("Kiosk ID and OwnerCap ID cannot be the same value.");
+      }
+  const obj = await suiClient.getObject({
         id: nftId,
         options: { showType: true, showOwner: true, showContent: true },
       } as any);
@@ -219,25 +247,27 @@ const createKiosk = async () => {
       }
 
       // Verify the OwnerCap actually belongs to the provided kiosk (common mismatch)
-      try {
-        const capObj = await suiClient.getObject({ id: capId, options: { showContent: true, showType: true } } as any);
-        const fields: any = (capObj as any)?.data?.content?.fields || {};
-        const capKioskId: string | undefined = (fields.kiosk || fields.kiosk_id || fields.for) as any;
-        if (capKioskId) {
-          if (capKioskId.toLowerCase() !== kioskId.toLowerCase()) {
-            throw new Error("The provided OwnerCap does not correspond to the provided Kiosk ID.");
-          }
-        } else {
-          console.warn("OwnerCap did not expose kiosk field; skipping pre-check.", {
-            capType: (capObj as any)?.data?.type,
-            fieldsKeys: Object.keys(fields || {}),
-          });
-        }
-      } catch (e: any) {
-        console.warn("Could not verify OwnerCap ↔ Kiosk pre-check; continuing to attempt listing.", e);
+      const capObj = await suiClient.getObject({ id: capId, options: { showContent: true, showType: true } } as any);
+      const capType = (capObj as any)?.data?.type as string | undefined;
+      if (!capType) throw new Error("Unable to resolve OwnerCap type.");
+      if (!capType.endsWith("::kiosk::KioskOwnerCap")) {
+        throw new Error(`OwnerCap type unsupported for this flow. Expected 0x2::kiosk::KioskOwnerCap, got: ${capType}. Please create a new kiosk using the Create New Kiosk button and use its OwnerCap.`);
+      }
+      const fields: any = (capObj as any)?.data?.content?.fields || {};
+      const capKioskId: string | undefined = (fields.kiosk || fields.kiosk_id || fields.for) as any;
+      if (!capKioskId) {
+        throw new Error("OwnerCap did not expose the kiosk field. Ensure the OwnerCap ID is correct and on the same network.");
+      }
+      if (capKioskId.toLowerCase() !== kioskId.toLowerCase()) {
+        throw new Error("The provided OwnerCap does not correspond to the provided Kiosk ID.");
       }
 
       console.log("Listing debug:", { nftId, kioskId, capId, nftType });
+
+      // Ensure the NFT is the expected TherapistNFT type from this package
+      if (!nftType.endsWith("::therapist_nft::TherapistNFT") || !nftType.startsWith(PACKAGE_ID)) {
+        throw new Error(`NFT type mismatch. Expected ${PACKAGE_ID}::therapist_nft::TherapistNFT, got: ${nftType}`);
+      }
 
       const priceMist = suiToMist(listPriceSui);
   if (priceMist <= BigInt(0)) throw new Error("Price must be greater than 0");
@@ -252,16 +282,51 @@ const createKiosk = async () => {
         tx.setGasBudget(50_000_000);
       }
 
+      // Resolve kiosk as a shared, mutable object reference (required by &mut Kiosk parameters)
+      const kioskObj = await suiClient.getObject({ id: kioskId, options: { showOwner: true, showType: true } } as any);
+      const kioskType = (kioskObj as any)?.data?.type as string | undefined;
+      if (!kioskType || !kioskType.endsWith("::kiosk::Kiosk")) {
+        throw new Error(`Kiosk type mismatch. Expected 0x2::kiosk::Kiosk, got: ${kioskType}`);
+      }
+      const sharedMeta: any = (kioskObj as any)?.data?.owner?.Shared || (kioskObj as any)?.data?.owner?.shared;
+      const initialSharedVersion = sharedMeta?.initial_shared_version ?? sharedMeta?.initialSharedVersion;
+      if (!initialSharedVersion) {
+        throw new Error("Kiosk is not a shared object or not found. Ensure the Kiosk ID is correct.");
+      }
+      const kioskRef = tx.sharedObjectRef({
+        objectId: kioskId,
+        initialSharedVersion: String(initialSharedVersion),
+        mutable: true,
+      });
+
       // Single entry call in your module: requires ownership, places then lists
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::list_for_sale`,
         arguments: [
-          tx.object(kioskId),
+          kioskRef,
           tx.object(capId),
           tx.object(nftId),
           tx.pure.u64(priceMist),
         ],
       });
+
+      // Preflight with dev-inspect to catch VM errors early
+      try {
+        // @ts-ignore
+        const inspect = await (suiClient as any).devInspectTransactionBlock?.({
+          sender: account.address,
+          transactionBlock: tx,
+        });
+        const err = (inspect as any)?.effects?.status?.error || (inspect as any)?.error;
+        if (err) {
+          throw new Error(`Preflight failed: ${err}`);
+        }
+      } catch (preErr: any) {
+        // Surface the error and stop to avoid burning gas on a known-bad tx
+        setError(String(preErr?.message || preErr));
+        endLoading("listNftForSale");
+        return;
+      }
 
       signAndExecuteTransaction(
         { transaction: tx },
@@ -279,6 +344,157 @@ const createKiosk = async () => {
     } catch (e: any) {
       setError(e?.message || String(e));
       endLoading("listNftForSale");
+    }
+  };
+
+  // Zero-rule TransferPolicy is created/shared at package init; paste its ID in the Buy form.
+
+  // Buy a listed NFT from a kiosk (standard kiosk purchase)
+  const buyNftFromKiosk = async () => {
+    if (!account) return;
+    startLoading("buyNft");
+    setBuyTxDigest(null);
+    try {
+  const itemId = buyItemId.trim();
+  const kioskId = buyKioskId.trim();
+  const policyId = buyPolicyId.trim();
+  if (!itemId || !kioskId) throw new Error("Provide Item (NFT) ID and Kiosk ID");
+  if (!policyId) throw new Error("Provide the shared TransferPolicy<TherapistNFT> ID (created at package init)");
+      // Early input validation for 0x-hex formatting
+      if (!isValidObjectId(itemId)) {
+        throw new Error(`Invalid Item (NFT) ID format. Expected 0x-prefixed hex, got: ${itemId || '<empty>'}`);
+      }
+      if (!isValidObjectId(kioskId)) {
+        throw new Error(`Invalid Kiosk ID format. Expected 0x-prefixed hex, got: ${kioskId || '<empty>'}`);
+      }
+      if (!isValidObjectId(policyId)) {
+        throw new Error(`Invalid Transfer Policy ID format. Expected 0x-prefixed hex, got: ${policyId || '<empty>'}`);
+      }
+      if (!buyPriceSui.trim()) throw new Error("Provide the listing price in SUI");
+
+      // Resolve NFT type for the purchase type argument
+      const obj = await suiClient.getObject({
+        id: itemId,
+        options: { showType: true, showContent: true, showOwner: true },
+      } as any);
+      const nftType = (obj as any)?.data?.type || (obj as any)?.data?.content?.type;
+      if (!nftType || typeof nftType !== "string") {
+        throw new Error("Unable to resolve NFT type. Confirm the item ID and network.");
+      }
+
+      // Ensure the NFT is the expected TherapistNFT from this package
+      if (!nftType.endsWith("::therapist_nft::TherapistNFT") || !nftType.startsWith(PACKAGE_ID)) {
+        throw new Error(`NFT type mismatch. Expected ${PACKAGE_ID}::therapist_nft::TherapistNFT, got: ${nftType}`);
+      }
+
+      // Advisory check: item should be owned by the kiosk when listed; if not, continue and let devInspect/purchase validate
+      const owner = (obj as any)?.data?.owner;
+      const kioskOwnerId: string | undefined = (owner && (owner as any).ObjectOwner) ? (owner as any).ObjectOwner : undefined;
+      if (!kioskOwnerId || kioskOwnerId.toLowerCase() !== kioskId.toLowerCase()) {
+        console.warn("Item owner is not the provided kiosk. Proceeding; purchase will fail if not actually listed.", { kioskOwnerId, kioskId });
+      }
+
+      const priceMist = suiToMist(buyPriceSui);
+      if (priceMist <= BigInt(0)) throw new Error("Price must be greater than 0");
+
+      const tx = new Transaction();
+      try {
+        tx.setGasBudget(BigInt("50000000") as any);
+      } catch {
+        // @ts-ignore
+        tx.setGasBudget(50_000_000);
+      }
+
+      // Create the payment coin equal to the listing price from gas
+      const [payment] = tx.splitCoins(tx.gas, [tx.pure.u64(priceMist)]);
+
+      // Resolve kiosk as a shared, mutable object reference
+      const kioskObj = await suiClient.getObject({ id: kioskId, options: { showOwner: true, showType: true } } as any);
+      const kioskType = (kioskObj as any)?.data?.type as string | undefined;
+      if (!kioskType || !kioskType.endsWith("::kiosk::Kiosk")) {
+        throw new Error(`Kiosk type mismatch. Expected 0x2::kiosk::Kiosk, got: ${kioskType}`);
+      }
+      const sharedMeta: any = (kioskObj as any)?.data?.owner?.Shared || (kioskObj as any)?.data?.owner?.shared;
+      const initialSharedVersion = sharedMeta?.initial_shared_version ?? sharedMeta?.initialSharedVersion;
+      if (!initialSharedVersion) {
+        throw new Error("Kiosk is not a shared object or not found. Ensure the Kiosk ID is correct.");
+      }
+      const kioskRef = tx.sharedObjectRef({
+        objectId: kioskId,
+        initialSharedVersion: String(initialSharedVersion),
+        mutable: true,
+      });
+
+      // Resolve TransferPolicy<TherapistNFT> as a shared, immutable reference
+      const tpObj = await suiClient.getObject({ id: policyId, options: { showOwner: true, showType: true } } as any);
+      const tpType = (tpObj as any)?.data?.type as string | undefined;
+      const expectedTp = `0x2::transfer_policy::TransferPolicy<${PACKAGE_ID}::therapist_nft::TherapistNFT>`;
+      if (!tpType || tpType !== expectedTp) {
+        throw new Error(`TransferPolicy type mismatch. Expected ${expectedTp}, got: ${tpType}`);
+      }
+      const tpShared: any = (tpObj as any)?.data?.owner?.Shared || (tpObj as any)?.data?.owner?.shared;
+      const tpInitialSharedVersion = tpShared?.initial_shared_version ?? tpShared?.initialSharedVersion;
+      if (!tpInitialSharedVersion) {
+        throw new Error("TransferPolicy is not shared. Provide the shared policy ID created at package init.");
+      }
+      const tpRef = tx.sharedObjectRef({
+        objectId: policyId,
+        initialSharedVersion: String(tpInitialSharedVersion),
+        mutable: false,
+      });
+
+      // Call your module buy entry: kiosk, TransferPolicy, item_id, payment
+      tx.moveCall({
+        target: `${PACKAGE_ID}::nft_rental::buy`,
+        arguments: [
+          kioskRef,
+          tpRef,
+          tx.pure.id(itemId),
+          payment,
+        ],
+      });
+
+      // Preflight with dev-inspect to catch VM errors early
+      try {
+        // @ts-ignore
+        const inspect = await (suiClient as any).devInspectTransactionBlock?.({
+          sender: account.address,
+          transactionBlock: tx,
+        });
+        const err = (inspect as any)?.effects?.status?.error || (inspect as any)?.error;
+        if (err) {
+          throw new Error(`Preflight failed: ${err}`);
+        }
+      } catch (preErr: any) {
+        setError(String(preErr?.message || preErr));
+        endLoading("buyNft");
+        return;
+      }
+
+  // No manual transfer needed; contract transfers NFT to buyer after confirming policy
+
+      signAndExecuteTransaction(
+        { transaction: tx },
+        {
+          onSuccess: (result) => {
+            setBuyTxDigest((result as any)?.digest ?? null);
+            handleTxResult(result, "Buy NFT");
+          },
+          onError: (e: any) => {
+            // Surface a friendlier message for common aborts
+            const msg = String(e?.message || e);
+            if (msg.includes("kiosk::purchase") && msg.includes("MoveAbort")) {
+              setError("Purchase aborted. Likely causes: wrong Kiosk ID/Item ID, or payment not equal to price. Confirm details and try again.");
+            } else {
+              setError(`Error buying NFT: ${msg}`);
+            }
+            endLoading("buyNft");
+          },
+        },
+      );
+    } catch (e: any) {
+      setError(e?.message || String(e));
+      endLoading("buyNft");
     }
   };
 
@@ -829,6 +1045,90 @@ const mintTherapistNft = async () => {
                         className="text-blue-400 hover:underline flex items-center"
                       >
                         View listing tx on SuiScan
+                        <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Buy from Kiosk */}
+              <Card className="border-0 glass border-glow hover:glow-green">
+                <CardHeader>
+                  <CardTitle>Buy from Kiosk</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Item (NFT) ID</label>
+                      <Input
+                        value={buyItemId}
+                        onChange={(e) => setBuyItemId(e.target.value)}
+                        placeholder="0x... listed NFT object ID"
+                        className="font-mono"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Use the TherapistNFT object ID (not the dynamic field/listing child ID).</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Kiosk ID</label>
+                      <Input
+                        value={buyKioskId}
+                        onChange={(e) => setBuyKioskId(e.target.value)}
+                        placeholder="0x... kiosk object ID"
+                        className="font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Transfer Policy ID</label>
+                    <Input
+                      value={buyPolicyId}
+                      onChange={(e) => setBuyPolicyId(e.target.value)}
+                      placeholder="0x... TransferPolicy<TherapistNFT> (shared) ID"
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Zero-rule policy is created/shared at package init. Paste its ID here.</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Price to Pay (SUI)</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={buyPriceSui}
+                        type="text"
+                        onChange={(e) => setBuyPriceSui(e.target.value)}
+                        placeholder="e.g. 1.5"
+                        className="w-full"
+                      />
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <DollarSign className="w-3 h-3" /> SUI
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={buyNftFromKiosk}
+                    disabled={loading.buyNft}
+                    className="w-full"
+                  >
+                    {loading.buyNft ? (
+                      <Clock className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <ShoppingBag className="w-4 h-4 mr-2" />
+                    )}
+                    Buy NFT
+                  </Button>
+
+                  {buyTxDigest && (
+                    <div className="text-sm mt-2">
+                      <a
+                        href={getTxLink(buyTxDigest)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:underline flex items-center"
+                      >
+                        View purchase tx on SuiScan
                         <ExternalLink className="w-3 h-3 ml-1" />
                       </a>
                     </div>
