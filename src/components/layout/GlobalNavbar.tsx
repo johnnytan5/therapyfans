@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,13 +12,6 @@ import {
   Home, 
   Search, 
   Calendar, 
-  User, 
-  Settings, 
-  HelpCircle,
-  Wallet,
-  ChevronDown,
-  LogOut,
-  Shield,
   Menu,
   X
 } from "lucide-react";
@@ -78,12 +72,14 @@ export function GlobalNavbar() {
           {/* Logo */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center glow-purple">
-                <Shield className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                TherapyFans
-              </span>
+              <Image
+                src="/therapy_fans.png"
+                alt="TherapyFans"
+                width={150}
+                height={32}
+                priority
+                className="h-8 w-auto"
+              />
             </Link>
           </div>
 
