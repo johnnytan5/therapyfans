@@ -28,10 +28,11 @@ import {
   Star
 } from "lucide-react";
 
+// Import centralized configuration
+import { PACKAGE_ID, NETWORK, CONTRACT_FUNCTIONS, SUI_TYPES, getCurrentNetworkConfig } from '@/lib/suiConfig';
+
 // Constants
-const PACKAGE_ID = "0x4257be6ae1a26a4bc491ca2d4db672678c3c50bee810efa8e6c34cf3cfa135c3";
-const NETWORK = "testnet";
-const EXPLORER_URL = "https://suiscan.xyz/testnet";
+const EXPLORER_URL = getCurrentNetworkConfig().explorerUrl;
 
 export default function SmartContractTest() {
   // Updated wallet hooks from dapp-kit
@@ -173,7 +174,7 @@ const createKiosk = async () => {
 
     // Call your module's entry fun that internally: kiosk::new + share + transfer cap
     tx.moveCall({
-      target: `${PACKAGE_ID}::nft_rental::new_kiosk`,
+      target: CONTRACT_FUNCTIONS.newKiosk,
       arguments: [],
     });
 
@@ -265,8 +266,8 @@ const createKiosk = async () => {
       console.log("Listing debug:", { nftId, kioskId, capId, nftType });
 
       // Ensure the NFT is the expected TherapistNFT type from this package
-      if (!nftType.endsWith("::therapist_nft::TherapistNFT") || !nftType.startsWith(PACKAGE_ID)) {
-        throw new Error(`NFT type mismatch. Expected ${PACKAGE_ID}::therapist_nft::TherapistNFT, got: ${nftType}`);
+      if (nftType !== SUI_TYPES.therapistNft) {
+        throw new Error(`NFT type mismatch. Expected ${SUI_TYPES.therapistNft}, got: ${nftType}`);
       }
 
       const priceMist = suiToMist(listPriceSui);
@@ -301,7 +302,7 @@ const createKiosk = async () => {
 
       // Single entry call in your module: requires ownership, places then lists
       tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::list_for_sale`,
+        target: CONTRACT_FUNCTIONS.listForSale,
         arguments: [
           kioskRef,
           tx.object(capId),
@@ -383,8 +384,8 @@ const createKiosk = async () => {
       }
 
       // Ensure the NFT is the expected TherapistNFT from this package
-      if (!nftType.endsWith("::therapist_nft::TherapistNFT") || !nftType.startsWith(PACKAGE_ID)) {
-        throw new Error(`NFT type mismatch. Expected ${PACKAGE_ID}::therapist_nft::TherapistNFT, got: ${nftType}`);
+      if (nftType !== SUI_TYPES.therapistNft) {
+        throw new Error(`NFT type mismatch. Expected ${SUI_TYPES.therapistNft}, got: ${nftType}`);
       }
 
       // Advisory check: item should be owned by the kiosk when listed; if not, continue and let devInspect/purchase validate
@@ -428,7 +429,7 @@ const createKiosk = async () => {
       // Resolve TransferPolicy<TherapistNFT> as a shared, immutable reference
       const tpObj = await suiClient.getObject({ id: policyId, options: { showOwner: true, showType: true } } as any);
       const tpType = (tpObj as any)?.data?.type as string | undefined;
-      const expectedTp = `0x2::transfer_policy::TransferPolicy<${PACKAGE_ID}::therapist_nft::TherapistNFT>`;
+      const expectedTp = SUI_TYPES.transferPolicy;
       if (!tpType || tpType !== expectedTp) {
         throw new Error(`TransferPolicy type mismatch. Expected ${expectedTp}, got: ${tpType}`);
       }
@@ -445,7 +446,7 @@ const createKiosk = async () => {
 
       // Call your module buy entry: kiosk, TransferPolicy, item_id, payment
       tx.moveCall({
-        target: `${PACKAGE_ID}::nft_rental::buy`,
+        target: CONTRACT_FUNCTIONS.buy,
         arguments: [
           kioskRef,
           tpRef,
@@ -535,7 +536,7 @@ const mintTherapistNft = async () => {
     console.log("Building mint transaction...");
     
     tx.moveCall({
-      target: `${PACKAGE_ID}::therapist_nft::mint`,
+      target: CONTRACT_FUNCTIONS.mintTherapistNft,
       arguments: [
         tx.pure.string(nftForm.name),
         tx.pure.string(nftForm.specialization),
