@@ -4,8 +4,7 @@
  */
 
 // Your deployed package ID
-export const PACKAGE_ID = process.env.NEXT_PUBLIC_PACKAGE_ID || "0xb3f9f06c70a1e836ff76c1753208073e8f0d24f3499302057355be24a9288d89";
-
+export const PACKAGE_ID = process.env.NEXT_PUBLIC_PACKAGE_ID;
 // Network configuration
 export const NETWORK = process.env.NEXT_PUBLIC_SUI_NETWORK || "testnet";
 

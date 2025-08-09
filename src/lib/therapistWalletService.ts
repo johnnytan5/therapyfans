@@ -55,7 +55,6 @@ interface KioskContentsResponse {
 const THERAPIST_NFT_TYPE = SUI_TYPES.therapistNft;
 
 // Support both old and new package IDs for backward compatibility
-const OLD_PACKAGE_ID = '0x4257be6ae1a26a4bc491ca2d4db672678c3c50bee810efa8e6c34cf3cfa135c3';
 const NEW_PACKAGE_ID = PACKAGE_ID;
 
 // Helper function to check if a type is a TherapistNFT (supports both old and new package IDs)

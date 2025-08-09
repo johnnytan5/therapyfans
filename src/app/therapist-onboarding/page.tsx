@@ -10,9 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { uploadVerificationDocuments, upsertTherapistByWallet } from '@/lib/therapistOnboardingService';
 import { supabase } from '@/lib/supabase';
 import { CheckCircle, X, ArrowRight, Zap, Loader2, ExternalLink, Copy } from 'lucide-react';
+import { PACKAGE_ID, getCurrentNetworkConfig } from '@/lib/suiConfig';
+
 
 // add to env later
-const THERAPIST_NFT_PACKAGE_ID = "0x7dee12dcb0e9afc507ef32e7741f18009f30ffbabe9fabdf53c2a4331793a76e";
+const THERAPIST_NFT_PACKAGE_ID = PACKAGE_ID;
 
 
 export default function TherapistOnboardingPage() {
