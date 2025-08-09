@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useConnectWallet, useCurrentAccount, useWallets, useDisconnectWallet } from '@mysten/dapp-kit';
+import { useConnectWallet, useCurrentAccount, useWallets, useDisconnectWallet, useSuiClientQuery } from '@mysten/dapp-kit';
 import { isEnokiWallet, EnokiWallet, AuthProvider } from '@mysten/enoki';
 import { useClientAuth } from '@/components/providers/ClientAuthProvider';
 import { CreateProfileModal } from '@/components/client/CreateProfileModal';
@@ -12,12 +12,10 @@ import {
   Wallet,
   ChevronDown,
   LogOut,
-  User,
-  Settings,
-  HelpCircle,
   CheckCircle,
   AlertCircle,
-  Plus
+  Plus,
+  User
 } from 'lucide-react';
 
 /**
@@ -35,17 +33,31 @@ export function EnokiWalletConnect() {
   
   const { client_profile, isLoading: isLoadingProfile, createClientProfile } = useClientAuth();
   
+  // Fetch wallet balance
+  const { data: balanceData, isLoading: isLoadingBalance, error: balanceError } = useSuiClientQuery(
+    'getBalance',
+    {
+      owner: currentAccount?.address || '',
+    },
+    {
+      enabled: !!currentAccount?.address,
+    }
+  );
+  
   // Stabilize profile status to prevent flickering
   const [stableProfileStatus, setStableProfileStatus] = useState<'loading' | 'found' | 'not-found'>('loading');
   const stabilityTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Debug: Track profile state changes
+  // Debug: Track profile state changes (can be removed in production)
   console.log('🔄 EnokiWalletConnect render:', {
     currentAccount: !!currentAccount?.address,
+    walletAddress: currentAccount?.address,
+    balanceData: balanceData,
+    isLoadingBalance,
+    balanceError: balanceError?.message,
     client_profile: !!client_profile,
     isLoadingProfile,
     stableProfileStatus,
-    walletAddress: currentAccount?.address?.slice(0, 8) + '...'
   });
 
   // Stabilize profile status with debouncing
@@ -70,6 +82,14 @@ export function EnokiWalletConnect() {
       }
     };
   }, [isLoadingProfile, client_profile]);
+
+  // Helper function to format SUI balance
+  const formatBalance = (balance: string | undefined): string => {
+    if (!balance) return '0.0000';
+    // Convert from MIST to SUI (1 SUI = 1,000,000,000 MIST)
+    const suiAmount = parseFloat(balance) / 1_000_000_000;
+    return suiAmount.toFixed(4);
+  };
 
   const wallets = useWallets().filter(isEnokiWallet);
   const walletsByProvider = wallets.reduce(
@@ -149,7 +169,7 @@ export function EnokiWalletConnect() {
               <div className="space-y-3 pb-4 border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-blue-500 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-white" />
+                    <Wallet className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <p className="font-medium">
@@ -190,56 +210,16 @@ export function EnokiWalletConnect() {
                 )}
 
                 {/* Wallet Balance */}
-                <WalletBalance />
+                <WalletBalance 
+                  address={currentAccount?.address}
+                  balance={formatBalance(balanceData?.totalBalance)}
+                  isLoading={isLoadingBalance}
+                  error={balanceError?.message || null}
+                />
               </div>
 
-              {/* Profile Stats */}
-              {client_profile && (
-                <div className="py-3 border-b border-border">
-                  <div className="grid grid-cols-2 gap-3 text-center">
-                    <div className="p-2 glass rounded border border-blue-500/30">
-                      <div className="text-sm font-bold text-blue-400">
-                        {client_profile.total_sessions}
-                      </div>
-                      <div className="text-xs text-blue-300">Sessions</div>
-                    </div>
-                    <div className="p-2 glass rounded border border-purple-500/30">
-                      <div className="text-sm font-bold text-purple-400">
-                        {client_profile.total_spent_sui.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-purple-300">SUI Spent</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Actions */}
-              <div className="pt-3 space-y-2">
-                <button
-                  onClick={() => {
-                    if (client_profile?.wallet_address) {
-                      window.location.href = `/client/${encodeURIComponent(client_profile.wallet_address)}`;
-                    }
-                  }}
-                  disabled={!client_profile?.wallet_address}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent transition-all duration-200 disabled:opacity-50"
-                >
-                  <User className="w-4 h-4" />
-                  <span>View Profile</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    // Open profile settings (you can implement this as a modal)
-                    console.log('Open profile settings');
-                    setIsDropdownOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent transition-all duration-200"
-                >
-                  <Settings className="w-4 h-4" />
-                  <span>Settings</span>
-                </button>
-
+              <div className="pt-3 border-t border-border">
                 <button
                   onClick={handleDisconnect}
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent transition-all duration-200 text-red-400"

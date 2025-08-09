@@ -30,26 +30,34 @@ interface NavItem {
   isActive?: (pathname: string) => boolean;
 }
 
-const getNavItems = (walletAddress?: string): NavItem[] => [
-  {
-    label: "Home",
-    href: "/",
-    icon: <Home className="w-4 h-4" />,
-    isActive: (pathname) => pathname === "/"
-  },
-  {
-    label: "Find Therapists", 
-    href: "/marketplace",
-    icon: <Search className="w-4 h-4" />,
-    isActive: (pathname) => pathname === "/marketplace" || pathname.startsWith("/therapist")
-  },
-  {
-    label: "My Sessions",
-    href: walletAddress ? `/client/${encodeURIComponent(walletAddress)}` : "/marketplace",
-    icon: <Calendar className="w-4 h-4" />,
-    isActive: (pathname) => pathname.startsWith("/client")
+const getNavItems = (walletAddress?: string): NavItem[] => {
+  const baseItems: NavItem[] = [
+    {
+      label: "Home",
+      href: "/",
+      icon: <Home className="w-4 h-4" />,
+      isActive: (pathname) => pathname === "/"
+    },
+    {
+      label: "Find Therapists", 
+      href: "/marketplace",
+      icon: <Search className="w-4 h-4" />,
+      isActive: (pathname) => pathname === "/marketplace" || pathname.startsWith("/therapist")
+    }
+  ];
+
+  // Only add "My Sessions" if we have a wallet address to avoid duplicate /marketplace href
+  if (walletAddress) {
+    baseItems.push({
+      label: "My Sessions",
+      href: `/client/${encodeURIComponent(walletAddress)}`,
+      icon: <Calendar className="w-4 h-4" />,
+      isActive: (pathname) => pathname.startsWith("/client")
+    });
   }
-];
+
+  return baseItems;
+};
 
 export function GlobalNavbar() {
   const pathname = usePathname();
