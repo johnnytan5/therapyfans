@@ -6,17 +6,26 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { TherapistCard } from "@/components/therapy/TherapistCard";
 import { VibeTag } from "@/components/therapy/VibeTag";
-import { Search, Filter, Star, Shield, ArrowLeft } from "lucide-react";
+import { ClientPreferencesForm } from "@/components/therapy/ClientPreferencesForm";
+import { AIMatchResults } from "@/components/therapy/AIMatchResults";
+import { Search, Filter, Star, Shield, ArrowLeft, Sparkles, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { getTherapists, TherapistWithRating } from "@/lib/therapistService";
+import { getTherapists, TherapistWithSpecializations } from "@/lib/therapistService";
+import { matchClientWithTherapists, ClientPreferences, TherapistMatch } from "@/lib/aiMatchmaking";
 
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"rating" | "price" | "name">("rating");
   const [minRating, setMinRating] = useState(0);
-  const [therapists, setTherapists] = useState<TherapistWithRating[]>([]);
+  const [therapists, setTherapists] = useState<TherapistWithSpecializations[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // AI Matchmaking states
+  const [matches, setMatches] = useState<TherapistMatch[]>([]);
+  const [matchmakingLoading, setMatchmakingLoading] = useState(false);
+  const [showMatchResults, setShowMatchResults] = useState(false);
+  const [clientPreferences, setClientPreferences] = useState<ClientPreferences | null>(null);
 
   // Fetch therapists from Supabase
   useEffect(() => {
@@ -62,7 +71,7 @@ export default function MarketplacePage() {
         );
 
       // Rating filter
-      const matchesRating = therapist.rating >= minRating;
+      const matchesRating = (therapist.rating || 0) >= minRating;
 
       return matchesSearch && matchesSpecialty && matchesRating;
     });
@@ -71,7 +80,7 @@ export default function MarketplacePage() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "rating":
-          return b.rating - a.rating;
+          return (b.rating || 0) - (a.rating || 0);
         case "price":
           return parseFloat(a.price_per_session || "0") - parseFloat(b.price_per_session || "0");
         case "name":
@@ -90,6 +99,40 @@ export default function MarketplacePage() {
         ? prev.filter(s => s !== specialty)
         : [...prev, specialty]
     );
+  };
+
+  // AI Matchmaking handlers
+  const handlePreferencesSubmit = async (preferences: ClientPreferences) => {
+    setMatchmakingLoading(true);
+    setClientPreferences(preferences);
+
+    try {
+      const matchResults = await matchClientWithTherapists({
+        clientPreferences: preferences,
+        therapists,
+        maxResults: 3
+      });
+
+      setMatches(matchResults);
+      setShowMatchResults(true);
+    } catch (error) {
+      console.error('Matchmaking error:', error);
+      // Still show results with fallback matching
+      setShowMatchResults(true);
+    } finally {
+      setMatchmakingLoading(false);
+    }
+  };
+
+  const handleRetry = () => {
+    setShowMatchResults(false);
+    setMatches([]);
+    setClientPreferences(null);
+  };
+
+  const handleBookSession = (therapistId: string) => {
+    // Navigate to booking page
+    window.location.href = `/purchase/session-${therapistId}`;
   };
 
   if (loading) {
@@ -338,7 +381,7 @@ export default function MarketplacePage() {
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-blue transition-all duration-300">
               <div className="text-2xl font-bold text-blue-400">
                 {therapists.length > 0 
-                  ? (therapists.reduce((sum, t) => sum + t.rating, 0) / therapists.length).toFixed(1)
+                  ? (therapists.reduce((sum, t) => sum + (t.rating || 0), 0) / therapists.length).toFixed(1)
                   : '0.0'
                 }
               </div>
@@ -347,6 +390,74 @@ export default function MarketplacePage() {
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-green transition-all duration-300">
               <div className="text-2xl font-bold text-green-400">5.00 SUI</div>
               <div className="text-sm text-muted-foreground">Per 15min Session</div>
+            </div>
+          </div>
+        </div>
+
+        {/* AI Matchmaking Section */}
+        <div className="mt-16 glass rounded-2xl p-8 border-glow hover:glow-purple transition-all duration-300">
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Sparkles className="w-8 h-8 text-purple-400 animate-pulse" />
+              <h3 className="text-2xl font-bold text-foreground">
+                AI <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">Matchmaking</span>
+              </h3>
+              <Sparkles className="w-8 h-8 text-purple-400 animate-pulse" />
+            </div>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Can't decide? Let our AI find your perfect therapist match based on your preferences, 
+              therapy goals, and emotional state. Get personalized recommendations in seconds.
+            </p>
+          </div>
+
+          {!showMatchResults ? (
+            <ClientPreferencesForm
+              onPreferencesSubmit={handlePreferencesSubmit}
+              loading={matchmakingLoading}
+            />
+          ) : (
+            <AIMatchResults
+              matches={matches}
+              therapists={therapists}
+              onBookSession={handleBookSession}
+              onRetry={handleRetry}
+              loading={matchmakingLoading}
+            />
+          )}
+
+          {/* How AI Matchmaking Works */}
+          <div className="mt-12 pt-8 border-t border-gray-100 dark:border-gray-800">
+            <h4 className="text-lg font-semibold text-foreground mb-6 text-center">
+              How AI Matchmaking Works
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center glass p-4 rounded-lg border-glow">
+                <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="w-6 h-6 text-purple-400" />
+                </div>
+                <h5 className="font-semibold mb-2">Smart Analysis</h5>
+                <p className="text-sm text-muted-foreground">
+                  Our AI analyzes your preferences, therapy goals, and emotional state
+                </p>
+              </div>
+              <div className="text-center glass p-4 rounded-lg border-glow">
+                <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="w-6 h-6 text-blue-400" />
+                </div>
+                <h5 className="font-semibold mb-2">Compatibility Scoring</h5>
+                <p className="text-sm text-muted-foreground">
+                  Matches therapists based on vibe, language, specialty, and budget fit
+                </p>
+              </div>
+              <div className="text-center glass p-4 rounded-lg border-glow">
+                <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="w-6 h-6 text-green-400" />
+                </div>
+                <h5 className="font-semibold mb-2">Personalized Results</h5>
+                <p className="text-sm text-muted-foreground">
+                  Get detailed compatibility breakdowns and reasoning for each match
+                </p>
+              </div>
             </div>
           </div>
         </div>

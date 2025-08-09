@@ -1,8 +1,21 @@
-import { supabase, Therapist } from './supabase';
+import { supabase } from './supabase';
 
-export interface TherapistWithRating extends Therapist {
-  rating: number;
-  reviewCount: number;
+export interface TherapistWithSpecializations {
+  id: string;
+  full_name: string;
+  profile_picture_url: string | null;
+  bio: string | null;
+  qualifications: string | null;
+  license_number: string | null;
+  years_of_experience: number | null;
+  therapy_styles: string[];
+  languages_spoken: string[];
+  price_per_session: string | null;
+  created_at: string;
+  is_verified: boolean;
+  specializations: string[];
+  rating?: number;
+  reviewCount?: number;
 }
 
 // Mock ratings for now - in a real app, you'd calculate these from reviews
@@ -14,59 +27,67 @@ const mockRatings: Record<string, { rating: number; reviewCount: number }> = {
   '10e722e7-584d-4c23-83f0-1e69d7b0c473': { rating: 4.9, reviewCount: 10 }, // Lisa Thompson
 };
 
-export async function getTherapists(): Promise<TherapistWithRating[]> {
+export async function getTherapists(): Promise<TherapistWithSpecializations[]> {
   try {
     const { data, error } = await supabase
       .from('therapists')
-      .select('*')
-      .eq('is_verified', true)
-      .order('created_at', { ascending: false });
+      .select(`
+        *,
+        therapist_specializations!inner(
+          specializations(name)
+        )
+      `)
+      .eq('is_verified', true);
 
     if (error) {
       console.error('Error fetching therapists:', error);
       return [];
     }
 
-    console.log('Raw therapist data from Supabase:', data);
+    // Transform the data to flatten specializations and add ratings
+    const therapists = data?.map((therapist: any) => ({
+      ...therapist,
+      specializations: therapist.therapist_specializations?.map((ts: any) => ts.specializations?.name).filter(Boolean) || [],
+      rating: mockRatings[therapist.id]?.rating || 4.5,
+      reviewCount: mockRatings[therapist.id]?.reviewCount || 0,
+    })) || [];
 
-    // Transform the data to include ratings and format for frontend
-    const transformedData = (data || []).map(therapist => {
-      console.log('Processing therapist:', therapist);
-      return {
-        ...therapist,
-        rating: mockRatings[therapist.id]?.rating || 4.5,
-        reviewCount: mockRatings[therapist.id]?.reviewCount || 0,
-      };
-    });
-
-    console.log('Transformed therapist data:', transformedData);
-    return transformedData;
+    return therapists;
   } catch (error) {
-    console.error('Error fetching therapists:', error);
+    console.error('Error in getTherapists:', error);
     return [];
   }
 }
 
-export async function getTherapistById(id: string): Promise<TherapistWithRating | null> {
+export async function getTherapistById(id: string): Promise<TherapistWithSpecializations | null> {
   try {
     const { data, error } = await supabase
       .from('therapists')
-      .select('*')
+      .select(`
+        *,
+        therapist_specializations!inner(
+          specializations(name)
+        )
+      `)
       .eq('id', id)
+      .eq('is_verified', true)
       .single();
 
-    if (error || !data) {
+    if (error) {
       console.error('Error fetching therapist:', error);
       return null;
     }
 
+    if (!data) return null;
+
     return {
       ...data,
+      specializations: data.therapist_specializations?.map((ts: any) => ts.specializations?.name).filter(Boolean) || [],
       rating: mockRatings[data.id]?.rating || 4.5,
       reviewCount: mockRatings[data.id]?.reviewCount || 0,
     };
   } catch (error) {
-    console.error('Error fetching therapist:', error);
+    console.error('Error in getTherapistById:', error);
     return null;
   }
 }

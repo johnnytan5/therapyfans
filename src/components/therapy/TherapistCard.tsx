@@ -4,13 +4,13 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VibeTag } from "./VibeTag";
-import { TherapistWithRating } from "@/lib/therapistService";
+import { TherapistWithSpecializations } from "@/lib/therapistService";
 import { Star, Shield, Clock } from "lucide-react";
 import { createBlurredAvatar, formatSui } from "@/lib/utils";
 import { getDisplayName, formatPrice } from "@/lib/therapistService";
 
 interface TherapistCardProps {
-  therapist: TherapistWithRating;
+  therapist: TherapistWithSpecializations;
   onBookSession?: () => void;
   compact?: boolean;
 }
@@ -70,20 +70,34 @@ export function TherapistCard({ therapist, onBookSession, compact = false }: The
         )}
         
         {/* Specializations */}
-        {therapist.therapy_styles && therapist.therapy_styles.length > 0 && (
+        {therapist.specializations && therapist.specializations.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Specializations
             </h4>
             <div className="flex flex-wrap gap-1">
-              {therapist.therapy_styles.slice(0, compact ? 2 : 4).map((style) => (
-                <VibeTag key={style} tag={style} variant="outline" />
+              {therapist.specializations.slice(0, compact ? 2 : 4).map((spec) => (
+                <VibeTag key={spec} tag={spec} variant="outline" />
               ))}
-              {therapist.therapy_styles.length > (compact ? 2 : 4) && (
+              {therapist.specializations.length > (compact ? 2 : 4) && (
                 <Badge variant="outline" className="text-xs">
-                  +{therapist.therapy_styles.length - (compact ? 2 : 4)} more
+                  +{therapist.specializations.length - (compact ? 2 : 4)} more
                 </Badge>
               )}
+            </div>
+          </div>
+        )}
+        
+        {/* Therapy Styles */}
+        {therapist.therapy_styles && therapist.therapy_styles.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Therapy Styles
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {therapist.therapy_styles.slice(0, 3).map((style) => (
+                <VibeTag key={style} tag={style} />
+              ))}
             </div>
           </div>
         )}
