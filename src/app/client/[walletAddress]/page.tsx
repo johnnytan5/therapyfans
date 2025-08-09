@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import { formatDate, formatTime, getTimeUntilSession, formatSui } from "@/lib/utils";
 import { CreateProfileModal } from "@/components/client/CreateProfileModal";
+import { UserRoleBadge } from "@/components/role/UserRoleBadge";
 
 interface ClientProfilePageProps {
   params: {
@@ -269,10 +270,7 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 </div>
                 <CardTitle className="text-xl">{clientProfile.anon_display_name}</CardTitle>
                 <div className="flex flex-col items-center gap-2">
-                  <Badge variant="outline" className="mx-auto">
-                    <Eye className="w-3 h-3 mr-1" />
-                    Anonymous Client
-                  </Badge>
+                  <UserRoleBadge walletAddress={clientProfile.wallet_address} />
                   {clientProfile.auth_provider && (
                     <Badge variant="secondary" className="mx-auto text-xs">
                       {clientProfile.auth_provider} zkLogin
