@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import { formatDate, formatTime, getTimeUntilSession, formatSui } from "@/lib/utils";
 import { CreateProfileModal } from "@/components/client/CreateProfileModal";
+import { UserRoleBadge } from "@/components/role/UserRoleBadge";
 
 interface ClientProfilePageProps {
   params: {
@@ -269,10 +270,7 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 </div>
                 <CardTitle className="text-xl">{clientProfile.anon_display_name}</CardTitle>
                 <div className="flex flex-col items-center gap-2">
-                  <Badge variant="outline" className="mx-auto">
-                    <Eye className="w-3 h-3 mr-1" />
-                    Anonymous Client
-                  </Badge>
+                  <UserRoleBadge walletAddress={clientProfile.wallet_address} />
                   {clientProfile.auth_provider && (
                     <Badge variant="secondary" className="mx-auto text-xs">
                       {clientProfile.auth_provider} zkLogin
@@ -306,30 +304,7 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                   </div>
                 )}
 
-                {/* Wallet & Privacy Info */}
-                <div className="space-y-3">
-                  {isOwnProfile && (
-                    <div className="p-3 glass rounded-lg border border-blue-500/30 glow-blue">
-                      <div className="flex items-center gap-2 text-blue-400">
-                        <Wallet className="w-4 h-4" />
-                        <span className="text-sm font-medium">Sui Wallet Connected</span>
-                      </div>
-                      <p className="text-xs text-blue-300 mt-1">
-                        Balance tracked • zkLogin authenticated
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="p-3 glass rounded-lg border border-purple-500/30 glow-purple">
-                    <div className="flex items-center gap-2 text-purple-400">
-                      <Shield className="w-4 h-4" />
-                      <span className="text-sm font-medium">100% Anonymous</span>
-                    </div>
-                    <p className="text-xs text-purple-300 mt-1">
-                      Identity protected by zkLogin technology
-                    </p>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
 
@@ -357,7 +332,7 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 
                 <div className="text-center p-3 glass rounded-lg border border-purple-500/30 glow-purple">
                   <div className="text-lg font-bold text-purple-400">
-                    {formatSui(clientProfile.total_spent_sui || pastSessions.length * 5)}
+                    {formatSui(clientProfile.total_spent_sui || pastSessions.reduce((sum, session) => sum + parseFloat(session.price_sui?.toString() || '0'), 0))}
                   </div>
                   <div className="text-xs text-purple-300">Total Investment in Wellness</div>
                 </div>
@@ -432,9 +407,13 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                             <CardContent className="p-6">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full blur-sm opacity-70" />
+                                  <img
+                                    src={session.therapist_profile_picture || `https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${session.therapist_wallet}`}
+                                    alt={`${session.therapist_name} - Professional Therapist`}
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-border"
+                                  />
                                   <div>
-                                    <h3 className="font-semibold text-lg">Therapist</h3>
+                                    <h3 className="font-semibold text-lg">{session.therapist_name || 'Therapist'}</h3>
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                       <Calendar className="w-4 h-4" />
                                       {formatDate(session.date)} at {session.start_time}
@@ -508,9 +487,13 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                         <CardContent className="p-6">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full blur-sm opacity-70" />
+                              <img
+                                src={session.therapist_profile_picture || `https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${session.therapist_wallet}`}
+                                alt={`${session.therapist_name} - Professional Therapist`}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-border"
+                              />
                               <div>
-                                <h3 className="font-semibold text-lg">Therapist</h3>
+                                <h3 className="font-semibold text-lg">{session.therapist_name || 'Therapist'}</h3>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Calendar className="w-4 h-4" />
                                   {formatDate(session.date)} at {session.start_time}

@@ -13,6 +13,8 @@ export function useWalletPersistence() {
 
   // Persist connection state to prevent logout during navigation
   useEffect(() => {
+    if (typeof window === 'undefined') return; // Server-side check
+    
     if (isConnected && walletAddress) {
       // Store connection state
       sessionStorage.setItem('wallet_connection_active', 'true');
@@ -32,6 +34,8 @@ export function useWalletPersistence() {
 
   // Check if wallet was recently connected (within last 30 seconds)
   const wasRecentlyConnected = useCallback(() => {
+    if (typeof window === 'undefined') return false; // Server-side check
+    
     const wasActive = sessionStorage.getItem('wallet_connection_active');
     const lastSeen = sessionStorage.getItem('wallet_last_seen');
     
@@ -43,6 +47,8 @@ export function useWalletPersistence() {
 
   // Clear stale connection data
   useEffect(() => {
+    if (typeof window === 'undefined') return; // Server-side check
+    
     const interval = setInterval(() => {
       const lastSeen = sessionStorage.getItem('wallet_last_seen');
       if (lastSeen) {

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
 import { useRouter } from "next/navigation";
@@ -27,37 +27,39 @@ export default function TherapistProfilePage({ params }: TherapistProfilePagePro
     async function fetchTherapistData() {
       try {
         const resolvedParams = await params;
-        
-        // Fetch therapist data
-        const { data: therapistData, error: therapistError } = await supabase
-          .from('therapists')
-          .select('*')
-          .eq('id', resolvedParams.id)
-          .single();
 
-        if (therapistError) {
-          setError('Therapist not found');
+        // Fetch therapist and specializations in parallel
+        const [therapistRes, specRes] = await Promise.all([
+          supabase
+            .from("therapists")
+            .select("*")
+            .eq("id", resolvedParams.id)
+            .single(),
+          supabase
+            .from("therapist_specializations")
+            .select(`
+              specializations(name)
+            `)
+            .eq("therapist_id", resolvedParams.id),
+        ]);
+
+        if (therapistRes.error) {
+          setError("Therapist not found");
           return;
         }
 
-        setTherapist(therapistData);
+        setTherapist(therapistRes.data);
 
-        // Fetch specializations
-        const { data: specData, error: specError } = await supabase
-          .from('therapist_specializations')
-          .select(`
-            specializations(name)
-          `)
-          .eq('therapist_id', resolvedParams.id);
-
-        if (!specError && specData) {
-          const specNames = specData
+        if (!specRes.error && specRes.data) {
+          const specNames = specRes.data
             .map((spec: any) => spec.specializations?.name)
             .filter(Boolean);
           setSpecializations(specNames);
         }
+
+
       } catch (err) {
-        setError('Failed to load therapist profile');
+        setError("Failed to load therapist profile");
       } finally {
         setLoading(false);
       }
@@ -241,6 +243,10 @@ export default function TherapistProfilePage({ params }: TherapistProfilePagePro
               </CardContent>
             </Card>
           </div>
+
+
+
+
         </div>
       </div>
     </div>

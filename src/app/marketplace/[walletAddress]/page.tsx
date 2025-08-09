@@ -72,13 +72,14 @@ export default function TherapistBookingPage() {
         const therapistData = await getTherapistByIdOrWallet(walletAddress);
         if (therapistData) {
           setTherapist(therapistData);
-          
+          console.log('🔍 Therapist data:', { id: therapistData.id, wallet_address: therapistData.wallet_address });
           // Use the therapist's wallet address for session queries (if we have it)
           const therapistWalletAddress = therapistData.wallet_address || walletAddress;
           console.log('🔍 Using wallet address for sessions:', therapistWalletAddress);
-          
           // Fetch real available sessions from database
-          const sessions = await SessionService.getAllAvailableSessionsForTherapist(therapistWalletAddress);
+          const sessions = await SessionService.getAllAvailableSessionsForTherapist(walletAddress);
+          console.log('📅 Fetched sessions:', sessions);
+          console.log('📅 Session dates:', sessions.map(s => ({ id: s.id, date: s.date, start_time: s.start_time })));
           setTimeSlots(sessions);
         }
       } catch (error) {
@@ -174,8 +175,13 @@ export default function TherapistBookingPage() {
   const refreshSessions = async () => {
     try {
       console.log('🔄 Refreshing available sessions...');
-      const sessions = await SessionService.getAllAvailableSessionsForTherapist(walletAddress);
-      setTimeSlots(sessions);
+      if (therapist?.wallet_address) {
+        console.log('🔄 Using therapist wallet address:', therapist.wallet_address);
+        const sessions = await SessionService.getAllAvailableSessionsForTherapist(therapist.wallet_address);
+        setTimeSlots(sessions);
+      } else {
+        console.error('No therapist wallet address available for refresh');
+      }
     } catch (error) {
       console.error('Error refreshing sessions:', error);
     }
@@ -184,9 +190,15 @@ export default function TherapistBookingPage() {
   // Filter time slots for selected date only
   const selectedDateSlots = useMemo(() => {
     const dateString = selectedDate.toISOString().split('T')[0];
-    return timeSlots
-      .filter(slot => slot.date === dateString)
-      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+    console.log('🗓️ Filtering for date:', dateString);
+    console.log('🗓️ Available time slots:', timeSlots.map(s => ({ id: s.id, date: s.date, start_time: s.start_time })));
+    const filtered = timeSlots.filter(slot => {
+      const matches = slot.date === dateString;
+      console.log(`🔍 Slot ${slot.id}: date=${slot.date}, matches=${matches}`);
+      return matches;
+    });
+    console.log('✅ Filtered slots for date:', filtered);
+    return filtered.sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [timeSlots, selectedDate]);
 
   // Date navigation functions
@@ -787,11 +799,23 @@ export default function TherapistBookingPage() {
             {/* Available Time Slots */}
             <Card className="glass border-glow">
               <CardHeader>
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-purple-400" />
-                  Available Times
-                </h3>
-                <p className="text-sm text-muted-foreground">Select a 30-minute session slot</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-purple-400" />
+                      Available Times
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Select a 30-minute session slot</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={refreshSessions}
+                    className="text-xs"
+                  >
+                    🔄 Refresh
+                  </Button>
+                </div>
               </CardHeader>
               
               <CardContent>

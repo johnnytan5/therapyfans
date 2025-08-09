@@ -36,7 +36,9 @@ export default function MarketplacePage() {
     async function fetchTherapists() {
       setLoading(true);
       try {
+        console.log('🔄 Fetching fresh therapist data...');
         const data = await getTherapists();
+        console.log('🔍 Fetched therapists with pricing:', data.map(t => ({ name: t.full_name, price: t.price_per_session })));
         setTherapists(data);
       } catch (error) {
         console.error('Error fetching therapists:', error);
@@ -47,6 +49,21 @@ export default function MarketplacePage() {
 
     fetchTherapists();
   }, []);
+
+  // Add a manual refresh function for debugging
+  const refreshTherapists = async () => {
+    setLoading(true);
+    try {
+      console.log('🔄 Manual refresh - clearing cache and fetching...');
+      const data = await getTherapists();
+      console.log('🔍 Fresh therapist data:', data.map(t => ({ name: t.full_name, price: t.price_per_session })));
+      setTherapists(data);
+    } catch (error) {
+      console.error('Error refreshing therapists:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Get unique specializations for filtering
   const allSpecializations = useMemo(() => {
@@ -202,10 +219,21 @@ export default function MarketplacePage() {
               </p>
             </div>
             
-            <Badge variant="outline" className="glass border-glow animate-pulse">
-              <Shield className="w-3 h-3 mr-1 text-purple-400" />
-              All Verified
-            </Badge>
+            <div className="flex gap-2">
+              <Badge variant="outline" className="glass border-glow animate-pulse">
+                <Shield className="w-3 h-3 mr-1 text-purple-400" />
+                All Verified
+              </Badge>
+              <Button 
+                onClick={refreshTherapists}
+                variant="outline" 
+                size="sm"
+                className="text-xs"
+                disabled={loading}
+              >
+                🔄 Debug Refresh
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -356,7 +384,9 @@ export default function MarketplacePage() {
             
             {filteredTherapists.length > 0 && (
               <div className="text-sm text-muted-foreground">
-                Starting from <span className="font-semibold text-green-400">5.00 SUI</span> per 30min session
+                Starting from <span className="font-semibold text-green-400">
+                  {Math.min(...filteredTherapists.map(t => parseFloat(t.price_per_session || '0'))).toFixed(2)} SUI
+                </span> per 30min session
               </div>
             )}
           </div>
@@ -421,8 +451,13 @@ export default function MarketplacePage() {
               <div className="text-sm text-muted-foreground">Average Rating</div>
             </div>
             <div className="text-center glass p-4 rounded-lg border-glow hover:glow-green transition-all duration-300">
-              <div className="text-2xl font-bold text-green-400">5.00 SUI</div>
-              <div className="text-sm text-muted-foreground">Per 30min Session</div>
+              <div className="text-2xl font-bold text-green-400">
+                {therapists.length > 0 
+                  ? `${(therapists.reduce((sum, t) => sum + parseFloat(t.price_per_session || '0'), 0) / therapists.length).toFixed(2)} SUI`
+                  : '0.00 SUI'
+                }
+              </div>
+              <div className="text-sm text-muted-foreground">Average Price Per Session</div>
             </div>
           </div>
         </div>

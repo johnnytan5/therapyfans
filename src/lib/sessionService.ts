@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { generateMeetingLink, generateMeetingRoomId } from './meetingLinks';
+import { generateMeetingId, generateMeetingRoomId } from './meetingLinks';
 
 // Database interfaces matching our schema
 export interface AvailableSession {
@@ -12,6 +12,7 @@ export interface AvailableSession {
   price_sui: number;
   status: 'available' | 'booked' | 'cancelled' | 'completed';
   meeting_room_id: string;
+  meeting_link: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +40,9 @@ export interface BookedSession {
   session_started_at: string | null;
   session_ended_at: string | null;
   updated_at: string;
+  // Therapist info (joined from therapists table)
+  therapist_name?: string;
+  therapist_profile_picture?: string | null;
 }
 
 // Frontend-compatible interface (matches existing SessionNFT)
@@ -107,6 +111,7 @@ export class SessionService {
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
+        meeting_link: session.meeting_link,
       }));
     } catch (error) {
       console.error('Error in getAvailableSessionsByTherapist:', error);
@@ -115,30 +120,37 @@ export class SessionService {
   }
 
   /**
-   * Get all available sessions for a therapist (next 7 days)
+   * Get all available sessions for a therapist (next 30 days)
    */
   static async getAllAvailableSessionsForTherapist(therapistWallet: string): Promise<SessionNFT[]> {
     try {
       const today = new Date();
-      const nextWeek = new Date();
-      nextWeek.setDate(today.getDate() + 7);
+      const nextMonth = new Date(); // Changed from nextWeek to nextMonth
+      nextMonth.setDate(today.getDate() + 30); // Extended to 30 days
+      const todayStr = today.toISOString().split('T')[0];
+      const nextMonthStr = nextMonth.toISOString().split('T')[0];
+
+      console.log('🔍 SessionService: Querying available sessions for therapist:', therapistWallet);
+      console.log('🔍 SessionService: Date range:', todayStr, 'to', nextMonthStr);
 
       const { data, error } = await supabase
         .from('available_sessions')
         .select('*')
         .eq('therapist_wallet', therapistWallet)
         .eq('status', 'available')
-        .gte('date', today.toISOString().split('T')[0])
-        .lte('date', nextWeek.toISOString().split('T')[0])
+        .gte('date', todayStr)
+        .lte('date', nextMonthStr)
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
+
+      console.log('🔍 SessionService: Raw query result:', { data, error });
 
       if (error) {
         console.error('Error fetching all available sessions:', error);
         return [];
       }
 
-      return (data || []).map((session: AvailableSession) => ({
+      const mapped = (data || []).map((session: AvailableSession) => ({
         id: session.id,
         therapist_wallet: session.therapist_wallet,
         date: session.date,
@@ -147,7 +159,11 @@ export class SessionService {
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
+        meeting_link: session.meeting_link,
       }));
+
+      console.log('🔍 SessionService: Mapped sessions:', mapped);
+      return mapped;
     } catch (error) {
       console.error('Error in getAllAvailableSessionsForTherapist:', error);
       return [];
@@ -209,7 +225,7 @@ export class SessionService {
 
       // Generate NFT and meeting data
       const nftTokenId = `token-${sessionId}-${Math.random().toString(36).substr(2, 5)}`;
-      const meetingLink = generateMeetingLink(
+      const meetingId = generateMeetingId(
         sessionId,
         availableSession.therapist_wallet,
         availableSession.date,
@@ -233,7 +249,7 @@ export class SessionService {
         session_status: 'upcoming',
         nft_token_id: nftTokenId,
         meeting_room_id: availableSession.meeting_room_id,
-        meeting_link: meetingLink,
+        meeting_link: meetingId,
         booked_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -302,7 +318,7 @@ export class SessionService {
         price_sui: availableSession.price_sui,
         status: 'booked',
         nft_token_id: nftTokenId,
-        meeting_link: meetingLink,
+        meeting_link: meetingId,
         meeting_room_id: availableSession.meeting_room_id,
         client_wallet: bookingData.client_wallet,
         purchased_at: bookedSession.booked_at,
@@ -316,23 +332,57 @@ export class SessionService {
   }
 
   /**
-   * Get booked sessions for a client
+   * Get booked sessions for a client with therapist information
    */
   static async getClientBookedSessions(clientWallet: string): Promise<BookedSession[]> {
     try {
-      const { data, error } = await supabase
+      // First, get the booked sessions
+      const { data: sessions, error: sessionsError } = await supabase
         .from('booked_sessions')
         .select('*')
         .eq('client_wallet', clientWallet)
         .order('date', { ascending: false })
         .order('start_time', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching client booked sessions:', error);
+      if (sessionsError) {
+        console.error('Error fetching client booked sessions:', sessionsError);
         return [];
       }
 
-      return data || [];
+      if (!sessions || sessions.length === 0) {
+        return [];
+      }
+
+      // Get unique therapist wallet addresses
+      const therapistWallets = [...new Set(sessions.map(s => s.therapist_wallet))];
+
+      // Fetch therapist information
+      const { data: therapists, error: therapistsError } = await supabase
+        .from('therapists')
+        .select('id, full_name, profile_picture_url')
+        .in('id', therapistWallets);
+
+      if (therapistsError) {
+        console.error('Error fetching therapist information:', therapistsError);
+        // Continue without therapist info
+      }
+
+      // Create a map of therapist wallet -> therapist info
+      const therapistMap = new Map();
+      if (therapists) {
+        therapists.forEach(therapist => {
+          therapistMap.set(therapist.id, therapist);
+        });
+      }
+
+      // Combine session data with therapist information
+      const transformedData = sessions.map(session => ({
+        ...session,
+        therapist_name: therapistMap.get(session.therapist_wallet)?.full_name || 'Unknown Therapist',
+        therapist_profile_picture: therapistMap.get(session.therapist_wallet)?.profile_picture_url || null,
+      }));
+
+      return transformedData;
     } catch (error) {
       console.error('Error in getClientBookedSessions:', error);
       return [];

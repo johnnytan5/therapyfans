@@ -8,6 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Types for our database tables
 export interface Therapist {
   id: string;
+  wallet_address: string;
   full_name: string;
   profile_picture_url: string | null;
   bio: string | null;
