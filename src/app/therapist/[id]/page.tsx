@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,12 +28,17 @@ interface TherapistProfilePageProps {
   };
 }
 
-export default async function TherapistProfilePage({ params }: TherapistProfilePageProps) {
-  const resolvedParams = await params;
+export default function TherapistProfilePage({ params }: TherapistProfilePageProps) {
+  const router = useRouter();
+  const [resolvedParams, setResolvedParams] = useState<{id: string} | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>("");
+
+  useEffect(() => {
+    Promise.resolve(params).then(setResolvedParams);
+  }, [params]);
   
   // Mock therapist data (in real app, fetch from API based on params.id)
-  const therapist = mockTherapistsWithProfiles.find(t => t.id === resolvedParams.id) || mockTherapistsWithProfiles[0];
+  const therapist = mockTherapistsWithProfiles.find(t => t.id === resolvedParams?.id) || mockTherapistsWithProfiles[0];
   const { alias, profile, tags } = therapist;
 
   // Mock session stats
@@ -44,7 +50,7 @@ export default async function TherapistProfilePage({ params }: TherapistProfileP
 
   const handleBookSession = (timeSlot: string) => {
     // Navigate to purchase page with selected time
-    window.location.href = `/purchase/session-${therapist.id}?time=${timeSlot}`;
+    router.push(`/purchase/session-${therapist.id}?time=${timeSlot}`);
   };
 
   return (

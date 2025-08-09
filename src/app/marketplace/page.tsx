@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { getTherapists, TherapistWithSpecializations } from "@/lib/therapistServ
 import { matchClientWithTherapists, ClientPreferences, TherapistMatch } from "@/lib/aiMatchmaking";
 
 export default function MarketplacePage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"rating" | "price" | "name">("rating");
@@ -21,6 +23,7 @@ export default function MarketplacePage() {
   const [therapists, setTherapists] = useState<TherapistWithSpecializations[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [navigating, setNavigating] = useState(false);
   
   // AI Matchmaking states
   const [matches, setMatches] = useState<TherapistMatch[]>([]);
@@ -141,8 +144,9 @@ export default function MarketplacePage() {
   };
 
   const handleBookSession = (therapistId: string) => {
-    // Navigate to booking page
-    window.location.href = `/purchase/session-${therapistId}`;
+    // Navigate to booking page using Next.js router
+    setNavigating(true);
+    router.push(`/purchase/session-${therapistId}`);
   };
 
   if (loading) {
@@ -156,6 +160,27 @@ export default function MarketplacePage() {
             <h3 className="text-lg font-medium text-foreground mb-2">
               Loading therapists...
             </h3>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show navigation loading overlay
+  if (navigating) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="text-center py-16">
+            <div className="mx-auto w-24 h-24 glass rounded-full flex items-center justify-center mb-4 border-glow animate-pulse">
+              <Search className="w-8 h-8 text-purple-400 animate-spin" />
+            </div>
+            <h3 className="text-lg font-medium text-foreground mb-2">
+              Navigating...
+            </h3>
+            <p className="text-muted-foreground">
+              Maintaining your wallet connection
+            </p>
           </div>
         </div>
       </div>
@@ -344,8 +369,9 @@ export default function MarketplacePage() {
                   key={therapist.id}
                   therapist={therapist}
                   onBookSession={() => {
-                    // Navigate to wallet-based booking page
-                    window.location.href = `/marketplace/${therapist.id}`;
+                    // Navigate to wallet-based booking page using Next.js router
+                    setNavigating(true);
+                    router.push(`/marketplace/${therapist.id}`);
                   }}
                 />
               ))}

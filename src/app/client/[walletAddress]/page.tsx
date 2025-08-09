@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TherapistCard } from "@/components/therapy/TherapistCard";
 import { VibeTag } from "@/components/therapy/VibeTag";
-import { mockUsers, mockSessionsWithDetails, mockTherapistsWithProfiles } from "@/data/mockData";
 import { ClientService } from "@/lib/clientService";
+import { SessionService, BookedSession } from "@/lib/sessionService";
+import { getTherapists, TherapistWithSpecializations } from "@/lib/therapistService";
 import { useClientProfile } from "@/components/providers/ClientAuthProvider";
 import { ClientProfile } from "@/types";
 import { 
@@ -35,11 +37,16 @@ interface ClientProfilePageProps {
 }
 
 export default function ClientProfilePage({ params }: ClientProfilePageProps) {
+  const router = useRouter();
   const [resolvedParams, setResolvedParams] = useState<{walletAddress: string} | null>(null);
   const [activeTab, setActiveTab] = useState<"sessions" | "upcoming" | "recommendations">("upcoming");
   const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [showCreateProfileModal, setShowCreateProfileModal] = useState(false);
+  const [bookedSessions, setBookedSessions] = useState<BookedSession[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [recommendedTherapists, setRecommendedTherapists] = useState<TherapistWithSpecializations[]>([]);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const { client: authClient, isAuthenticated, wallet_address } = useClientProfile();
   const loadingRef = useRef(false);
 
@@ -103,6 +110,58 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
 
     loadClientProfile();
   }, [resolvedParams?.walletAddress]);
+
+  // Load booked sessions for the client
+  useEffect(() => {
+    async function loadBookedSessions() {
+      if (!resolvedParams?.walletAddress) return;
+
+      setIsLoadingSessions(true);
+      try {
+        console.log('📋 Loading booked sessions for:', resolvedParams.walletAddress);
+        const sessions = await SessionService.getClientBookedSessions(resolvedParams.walletAddress);
+        setBookedSessions(sessions);
+        console.log('✅ Loaded sessions:', sessions.length);
+      } catch (error) {
+        console.error('❌ Error loading booked sessions:', error);
+      } finally {
+        setIsLoadingSessions(false);
+      }
+    }
+
+    loadBookedSessions();
+  }, [resolvedParams?.walletAddress]);
+
+  // Load recommended therapists from Supabase
+  useEffect(() => {
+    async function loadRecommendedTherapists() {
+      if (!clientProfile) return;
+
+      setIsLoadingRecommendations(true);
+      try {
+        console.log('🎯 Loading recommended therapists from Supabase...');
+        
+        // Get all therapists from Supabase
+        const allTherapists = await getTherapists();
+        
+        // For now, show top 3 highest rated therapists as recommendations
+        // In the future, this could be enhanced with AI-based matching
+        const recommendations = allTherapists
+          .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+          .slice(0, 3);
+        
+        setRecommendedTherapists(recommendations);
+        console.log('✅ Loaded', recommendations.length, 'recommended therapists');
+      } catch (error) {
+        console.error('💥 Error loading recommended therapists:', error);
+        setRecommendedTherapists([]);
+      } finally {
+        setIsLoadingRecommendations(false);
+      }
+    }
+
+    loadRecommendedTherapists();
+  }, [clientProfile]);
   
   if (!resolvedParams || isLoadingProfile) {
     return <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid pt-20 flex items-center justify-center">
@@ -163,33 +222,15 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
   // Check if this is the authenticated user's own profile
   const isOwnProfile = isAuthenticated && authClient?.wallet_address === clientProfile.wallet_address;
   
-  // Get client's sessions (filtered by wallet address)
-  // Note: In production, you'd query sessions by client_wallet_address
-  const clientSessions = mockSessionsWithDetails.filter(s => 
-    // For now, we'll match against a mock client ID derived from wallet
-    s.client_id === `client-${clientProfile.wallet_address.slice(-8)}`
+  // Filter real booked sessions by status
+  const pastSessions = bookedSessions.filter(s => 
+    s.session_status === 'completed' || s.session_status === 'cancelled' || s.session_status === 'no_show'
   );
-  const pastSessions = clientSessions.filter(s => s.status === 'completed');
-  const upcomingSessions = clientSessions.filter(s => s.status === 'scheduled');
+  const upcomingSessions = bookedSessions.filter(s => 
+    s.session_status === 'upcoming' || s.session_status === 'ongoing'
+  );
   
-  // Mock recommended therapists (AI-matched) - convert to new format
-  const recommendedTherapists = mockTherapistsWithProfiles.slice(0, 2).map(therapist => ({
-    id: therapist.id,
-    full_name: therapist.alias,
-    profile_picture_url: null,
-    bio: therapist.profile.bio,
-    qualifications: null,
-    license_number: null,
-    years_of_experience: null,
-    therapy_styles: therapist.metadata?.vibe_tags || [],
-    languages_spoken: ['English'],
-    price_per_session: '5.00',
-    created_at: therapist.created_at,
-    is_verified: therapist.profile.verified,
-    specializations: therapist.profile.specializations,
-    rating: 4.5,
-    reviewCount: 0,
-  }));
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
@@ -376,48 +417,59 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 
                 {upcomingSessions.length > 0 ? (
                   <div className="space-y-4">
-                    {upcomingSessions.map((session) => {
-                      const { timeLeft, isToday, isUpcoming } = getTimeUntilSession(session.scheduled_time);
-                      
-                      return (
-                        <Card key={session.id} className="border-0 glass border-glow hover:glow-blue transition-all duration-300">
-                          <CardContent className="p-6">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full blur-sm opacity-70" />
-                                <div>
-                                  <h3 className="font-semibold text-lg">{session.therapist.alias}</h3>
-                                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Calendar className="w-4 h-4" />
-                                    {formatDate(session.scheduled_time)} at {formatTime(session.scheduled_time)}
-                                  </div>
-                                  <div className="flex items-center gap-2 text-sm">
-                                    <Clock className="w-4 h-4" />
-                                    {session.duration_min} minutes • {formatSui(session.price_sui)}
+                    {isLoadingSessions ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading sessions...</p>
+                      </div>
+                    ) : (
+                      upcomingSessions.map((session) => {
+                        const sessionDateTime = new Date(`${session.date}T${session.start_time}`);
+                        const { timeLeft, isToday, isUpcoming } = getTimeUntilSession(sessionDateTime.toISOString());
+                        
+                        return (
+                          <Card key={session.id} className="border-0 glass border-glow hover:glow-blue transition-all duration-300">
+                            <CardContent className="p-6">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full blur-sm opacity-70" />
+                                  <div>
+                                    <h3 className="font-semibold text-lg">Therapist</h3>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <Calendar className="w-4 h-4" />
+                                      {formatDate(session.date)} at {session.start_time}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <Clock className="w-4 h-4" />
+                                      {session.duration_minutes} minutes • {session.price_sui} SUI
+                                    </div>
+                                    <div className="text-xs text-muted-foreground font-mono mt-1">
+                                      {session.therapist_wallet.slice(0, 8)}...{session.therapist_wallet.slice(-6)}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              
-                              <div className="text-right space-y-2">
-                                {isUpcoming && (
-                                  <Badge variant={isToday ? "default" : "outline"}>
-                                    {isToday ? "Today" : "Upcoming"}
-                                  </Badge>
-                                )}
-                                <div className="text-sm font-medium text-blue-400">
-                                  {timeLeft}
+                                
+                                <div className="text-right space-y-2">
+                                  {isUpcoming && (
+                                    <Badge variant={isToday ? "default" : "outline"}>
+                                      {isToday ? "Today" : "Upcoming"}
+                                    </Badge>
+                                  )}
+                                  <div className="text-sm font-medium text-blue-400">
+                                    {timeLeft}
+                                  </div>
+                                  <Button size="sm" asChild>
+                                    <Link href={session.meeting_link || `/session/${session.meeting_room_id}`}>
+                                      {isToday ? "Join Session" : "View Details"}
+                                    </Link>
+                                  </Button>
                                 </div>
-                                <Button size="sm" asChild>
-                                  <Link href={`/session/${session.id}`}>
-                                    {isToday ? "Join Session" : "View Details"}
-                                  </Link>
-                                </Button>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    )}
                   </div>
                 ) : (
                   <Card className="border-0">
@@ -444,7 +496,12 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                   Past Sessions
                 </h2>
                 
-                {pastSessions.length > 0 ? (
+                {isLoadingSessions ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading sessions...</p>
+                  </div>
+                ) : pastSessions.length > 0 ? (
                   <div className="space-y-4">
                     {pastSessions.map((session) => (
                       <Card key={session.id} className="border-0 glass border-glow hover:glow-green transition-all duration-300">
@@ -453,14 +510,17 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full blur-sm opacity-70" />
                               <div>
-                                <h3 className="font-semibold text-lg">{session.therapist.alias}</h3>
+                                <h3 className="font-semibold text-lg">Therapist</h3>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Calendar className="w-4 h-4" />
-                                  {formatDate(session.scheduled_time)}
+                                  {formatDate(session.date)} at {session.start_time}
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Clock className="w-4 h-4" />
-                                  {session.duration_min} minutes • {formatSui(session.price_sui)}
+                                  {session.duration_minutes} minutes • {session.price_sui} SUI
+                                </div>
+                                <div className="text-xs text-muted-foreground font-mono mt-1">
+                                  {session.therapist_wallet.slice(0, 8)}...{session.therapist_wallet.slice(-6)}
                                 </div>
                               </div>
                             </div>
@@ -501,20 +561,39 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                   Recommended for You
                 </h2>
                 <p className="text-muted-foreground">
-                  AI-matched therapists based on your preferences and session history
+                  Top-rated therapists from our verified professional network
                 </p>
                 
-                <div className="grid grid-cols-1 gap-6">
-                  {recommendedTherapists.map((therapist) => (
-                    <TherapistCard
-                      key={therapist.id}
-                      therapist={therapist}
-                      onBookSession={() => {
-                        window.location.href = `/purchase/session-${therapist.id}`;
-                      }}
-                    />
-                  ))}
-                </div>
+                {isLoadingRecommendations ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400 mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading recommendations...</p>
+                  </div>
+                ) : recommendedTherapists.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-6">
+                    {recommendedTherapists.map((therapist) => (
+                      <TherapistCard
+                        key={therapist.id}
+                        therapist={therapist}
+                        onBookSession={() => {
+                          router.push(`/marketplace/${therapist.id}`);
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <Card className="border-0">
+                    <CardContent className="text-center py-12">
+                      <User className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-foreground mb-2">
+                        No recommendations yet
+                      </h3>
+                      <p className="text-muted-foreground mb-4">
+                        Complete a session to get personalized therapist recommendations
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
                 
                 <div className="text-center pt-4">
                   <Button variant="outline" asChild>

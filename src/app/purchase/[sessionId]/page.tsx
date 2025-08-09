@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,10 +33,15 @@ interface PurchasePageProps {
   };
 }
 
-export default async function PurchasePage({ params, searchParams }: PurchasePageProps) {
-  // Await the params and searchParams to fix Next.js 15 warnings
-  const resolvedParams = await params;
-  const resolvedSearchParams = await searchParams;
+export default function PurchasePage({ params, searchParams }: PurchasePageProps) {
+  const router = useRouter();
+  const [resolvedParams, setResolvedParams] = useState<{sessionId: string} | null>(null);
+  const [resolvedSearchParams, setResolvedSearchParams] = useState<{time?: string} | null>(null);
+
+  useEffect(() => {
+    Promise.resolve(params).then(setResolvedParams);
+    Promise.resolve(searchParams).then(setResolvedSearchParams);
+  }, [params, searchParams]);
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState("");
   const [suiBalance, setSuiBalance] = useState(0);
@@ -45,10 +51,10 @@ export default async function PurchasePage({ params, searchParams }: PurchasePag
   const [sessionNftId, setSessionNftId] = useState("");
 
   // Extract therapist ID from sessionId (format: "session-therapist-1")
-  const therapistId = resolvedParams.sessionId.replace('session-', '');
+  const therapistId = resolvedParams?.sessionId?.replace('session-', '') || '';
   const therapist = mockTherapistsWithProfiles.find(t => t.id === therapistId) || mockTherapistsWithProfiles[0];
   
-  const selectedTime = resolvedSearchParams.time || "14:00";
+  const selectedTime = resolvedSearchParams?.time || "14:00";
   const sessionPrice = 5.0;
   const sessionDate = new Date().toISOString().split('T')[0]; // Today's date
 
@@ -79,7 +85,7 @@ export default async function PurchasePage({ params, searchParams }: PurchasePag
   const handleBookSession = () => {
     if (paymentComplete) {
       // Navigate to session page
-      window.location.href = `/session/booked-${resolvedParams.sessionId}`;
+      router.push(`/session/booked-${resolvedParams.sessionId}`);
     } else {
       processPayment();
     }

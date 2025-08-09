@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EnokiWalletConnect } from "@/components/wallet/EnokiWalletConnect";
 import { useClientProfile } from "@/components/providers/ClientAuthProvider";
+import { useWalletPersistence } from "@/hooks/useWalletPersistence";
 import { 
   Home, 
   Search, 
@@ -58,8 +59,11 @@ export function GlobalNavbar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { client, wallet_address } = useClientProfile();
+  const { isConnected, wasRecentlyConnected } = useWalletPersistence();
   
-  const navItems = getNavItems(wallet_address || undefined);
+  // Use wallet persistence to prevent UI flicker during navigation
+  const effectiveWalletAddress = wallet_address || (wasRecentlyConnected() ? 'temp' : undefined);
+  const navItems = getNavItems(effectiveWalletAddress);
 
   // Don't show navbar on active session pages
   if (pathname.includes("/session/") && !pathname.includes("lobby")) {

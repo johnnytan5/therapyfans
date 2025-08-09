@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,7 @@ interface SessionPageProps {
 }
 
 export default function SessionPage({ params }: SessionPageProps) {
+  const router = useRouter();
   const [resolvedParams, setResolvedParams] = useState<{id: string} | null>(null);
   const { client, wallet_address } = useClientProfile();
 
@@ -145,7 +147,7 @@ export default function SessionPage({ params }: SessionPageProps) {
     if (wallet_address) {
       window.location.href = `/client/${encodeURIComponent(wallet_address)}`;
     } else {
-      window.location.href = '/marketplace';
+      router.push('/marketplace');
     }
   };
 
