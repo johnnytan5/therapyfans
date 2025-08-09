@@ -16,7 +16,9 @@ import {
   Award,
   ExternalLink,
   Copy,
-  MoreHorizontal
+  MoreHorizontal,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import Link from "next/link";
 import { useCurrentAccount } from '@mysten/dapp-kit';
@@ -49,6 +51,7 @@ export default function MySessionsPage() {
   const [pastSessions, setPastSessions] = useState<SessionNFT[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [revealedMeetingIds, setRevealedMeetingIds] = useState<Set<string>>(new Set());
 
   // Fetch user's booked sessions
   useEffect(() => {
@@ -101,6 +104,18 @@ export default function MySessionsPage() {
     } catch (err) {
       console.error('Failed to copy link:', err);
     }
+  };
+
+  const toggleMeetingIdReveal = (sessionId: string) => {
+    setRevealedMeetingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
   };
 
   const getTimeUntilSession = (date: string, time: string) => {
@@ -266,19 +281,67 @@ export default function MySessionsPage() {
                             <div className="flex items-center gap-2 text-xs text-muted-foreground">
                               <span>NFT ID:</span>
                               <span className="font-mono">{session.nft_token_id?.slice(0, 20)}...</span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => copyMeetingLink(session.meeting_link!, session.id)}
-                                className="h-6 px-2"
-                              >
-                                {copiedLink === session.id ? (
-                                  <CheckCircle className="w-3 h-3 text-green-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3" />
-                                )}
-                              </Button>
+                              {session.nft_token_id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyMeetingLink(session.nft_token_id!, `nft-${session.id}`)}
+                                  className="h-6 px-2"
+                                >
+                                  {copiedLink === `nft-${session.id}` ? (
+                                    <CheckCircle className="w-3 h-3 text-green-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </Button>
+                              )}
                             </div>
+
+                            {session.meeting_link && (
+                              <div className="mt-2">
+                                <div className="text-xs text-purple-700 font-semibold flex items-center">
+                                  <div className="w-2 h-2 bg-purple-400 rounded-full mr-2"></div>
+                                  Meeting ID
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleMeetingIdReveal(session.id)}
+                                    className="ml-2 h-6 px-3 text-xs bg-purple-100/60 hover:bg-purple-200/80 border border-purple-200 rounded-md"
+                                  >
+                                    {revealedMeetingIds.has(session.id) ? (
+                                      <>
+                                        <EyeOff className="w-3 h-3 mr-1 text-purple-600" />
+                                        Hide
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Eye className="w-3 h-3 mr-1 text-purple-600" />
+                                        Reveal
+                                      </>
+                                    )}
+                                  </Button>
+                                  {revealedMeetingIds.has(session.id) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyMeetingLink(session.meeting_link!, `meet-${session.id}`)}
+                                      className="ml-2 h-6 px-2"
+                                    >
+                                      {copiedLink === `meet-${session.id}` ? (
+                                        <CheckCircle className="w-3 h-3 text-green-400" />
+                                      ) : (
+                                        <Copy className="w-3 h-3" />
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                                {revealedMeetingIds.has(session.id) && (
+                                  <div className="text-xs text-purple-800 break-all font-mono bg-purple-50/80 p-2 rounded border border-purple-100 mt-1">
+                                    {session.meeting_link}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex flex-col gap-2">

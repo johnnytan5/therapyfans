@@ -9,13 +9,17 @@ import { ArrowLeft, Star, Shield, Clock, Calendar, CheckCircle, Loader2, Chevron
 import Link from "next/link";
 import { useCurrentAccount, useSignAndExecuteTransaction, useSuiClientQuery } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { getTherapistById, TherapistWithSpecializations, getDisplayName } from "@/lib/therapistService";
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { getTherapistByIdOrWallet, isWalletAddress, TherapistWithSpecializations, getDisplayName } from "@/lib/therapistService";
 import { 
-  SessionNFT, 
+  formatTime, 
+  formatDate, 
   getDayName 
 } from "@/lib/meetingLinks";
-import { SessionService, BookingData } from "@/lib/sessionService";
-import { createBlurredAvatar, formatSui, mistToSui, formatTime, formatDate } from "@/lib/utils";
+import { SessionService, BookingData, SessionNFT } from "@/lib/sessionService";
+import { createBlurredAvatar, formatSui, mistToSui } from "@/lib/utils";
+import { getTherapistIdFromWallet, verifyTherapistWallet, diagnosePotentialKioskIssues } from "@/lib/therapistWalletService";
+import { CONTRACT_FUNCTIONS } from "@/lib/suiConfig";
 
 // SUI Network constants
 const MIST_PER_SUI = 1_000_000_000;
@@ -39,6 +43,9 @@ export default function TherapistBookingPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [bookedNFT, setBookedNFT] = useState<SessionNFT | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
+  const [therapistIdFromWallet, setTherapistIdFromWallet] = useState<string | null>(null);
+  const [walletVerified, setWalletVerified] = useState<boolean>(false);
+  const [bookingProofNftId, setBookingProofNftId] = useState<string | null>(null);
 
   // Get wallet balance
   const { data: balanceData, isLoading: isLoadingBalance } = useSuiClientQuery(
@@ -59,16 +66,18 @@ export default function TherapistBookingPage() {
     async function fetchTherapistAndSessions() {
       setLoading(true);
       try {
-        console.log('🔍 URL walletAddress parameter:', walletAddress);
-        const therapistData = await getTherapistById(walletAddress);
+        console.log('🔍 Fetching therapist data for identifier:', walletAddress);
+        console.log('🔍 Is wallet address?', isWalletAddress(walletAddress));
+        
+        const therapistData = await getTherapistByIdOrWallet(walletAddress);
         if (therapistData) {
           setTherapist(therapistData);
           console.log('🔍 Therapist data:', { id: therapistData.id, wallet_address: therapistData.wallet_address });
-          
-          // Use the therapist's actual wallet address for session queries
-          const therapistWalletAddress = therapistData.wallet_address;
-          console.log('🔍 Fetching sessions for therapist wallet:', therapistWalletAddress);
-          const sessions = await SessionService.getAllAvailableSessionsForTherapist(therapistWalletAddress);
+          // Use the therapist's wallet address for session queries (if we have it)
+          const therapistWalletAddress = therapistData.wallet_address || walletAddress;
+          console.log('🔍 Using wallet address for sessions:', therapistWalletAddress);
+          // Fetch real available sessions from database
+          const sessions = await SessionService.getAllAvailableSessionsForTherapist(walletAddress);
           console.log('📅 Fetched sessions:', sessions);
           console.log('📅 Session dates:', sessions.map(s => ({ id: s.id, date: s.date, start_time: s.start_time })));
           setTimeSlots(sessions);
@@ -84,6 +93,58 @@ export default function TherapistBookingPage() {
       fetchTherapistAndSessions();
     }
   }, [walletAddress]);
+
+  // Example usage of getTherapistIdFromWallet function
+  useEffect(() => {
+    async function verifyAndGetTherapistId() {
+      if (!walletAddress || !therapist) return;
+      
+      // Get the actual wallet address - could be from therapist data or the route param
+      const actualWalletAddress = therapist.wallet_address || (isWalletAddress(walletAddress) ? walletAddress : null);
+      
+      if (!actualWalletAddress) {
+        console.warn('⚠️ No wallet address available for therapist verification');
+        setWalletVerified(false);
+        return;
+      }
+      
+      try {
+        console.log('🔍 Verifying therapist wallet and fetching ID...');
+        console.log('🔍 Using wallet address:', actualWalletAddress);
+        
+        // First verify the wallet has proper therapist setup
+        const isVerified = await verifyTherapistWallet(actualWalletAddress);
+        setWalletVerified(isVerified);
+        
+        if (isVerified) {
+          // Get the therapist ID from their wallet's TherapistNFT
+          const therapistId = await getTherapistIdFromWallet(actualWalletAddress);
+          setTherapistIdFromWallet(therapistId);
+          
+          console.log('✅ Therapist ID retrieved:', therapistId);
+          console.log('🏷️ This ID can now be used for soulbound NFT minting');
+          
+          // Store for potential soulbound NFT reference
+          const therapistIdForSoulbound = therapistId;
+          console.log('💾 Therapist ID ready for soulbound minting:', therapistIdForSoulbound);
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not verify therapist wallet or get ID:', error);
+        setWalletVerified(false);
+        
+        // Provide diagnostic information
+        try {
+          const diagnosis = await diagnosePotentialKioskIssues(actualWalletAddress);
+          console.log('🔍 Wallet diagnosis:', diagnosis);
+          console.log('💡 Suggestions:', diagnosis.suggestions);
+        } catch (diagError) {
+          console.warn('Could not diagnose wallet issues:', diagError);
+        }
+      }
+    }
+
+    verifyAndGetTherapistId();
+  }, [walletAddress, therapist]);
 
   // Handle countdown and redirect
   useEffect(() => {
@@ -160,37 +221,315 @@ export default function TherapistBookingPage() {
       return;
     }
 
-    // Use mock wallet address if no real wallet connected
-    const walletAddr = currentAccount?.address || 'mock-wallet-address';
+    if (!currentAccount) {
+      setPaymentError('Please connect your wallet to book a session.');
+      return;
+    }
+
+    if (!therapistIdFromWallet) {
+      setPaymentError('Therapist ID not available. Please ensure the therapist has set up their blockchain profile.');
+      return;
+    }
+
+    const walletAddr = currentAccount.address;
     
     setPurchasing(true);
     setPaymentError('');
     
     try {
-      console.log('Starting session booking...', { 
+      console.log('Starting session booking with soulbound NFT minting...', { 
         slot: selectedSlot.id, 
         wallet: walletAddr,
-        therapist: walletAddress 
+        therapist: walletAddress,
+        therapistId: therapistIdFromWallet
       });
       
-      // Mock payment processing delay
-      await new Promise(resolve => setTimeout(resolve, 2500));
+      // Convert session time to epoch milliseconds for the smart contract
+      console.log('Raw slot data:', {
+        date: selectedSlot.date,
+        start_time: selectedSlot.start_time,
+        duration_minutes: selectedSlot.duration_minutes,
+        dateType: typeof selectedSlot.date,
+        timeType: typeof selectedSlot.start_time,
+        durationType: typeof selectedSlot.duration_minutes
+      });
+
+      // Validate date and time data
+      if (!selectedSlot.date || !selectedSlot.start_time) {
+        throw new Error(`Missing session data: date=${selectedSlot.date}, time=${selectedSlot.start_time}, duration=${selectedSlot.duration_minutes}`);
+      }
+
+      // Handle duration_minutes - it might be missing in mock data
+      const duration = selectedSlot.duration_minutes || 30; // Default to 30 minutes if missing
       
-      // Generate mock transaction hash
-      const mockTxHash = `0x${Math.random().toString(16).substr(2, 40)}`;
-      setTransactionHash(mockTxHash);
+      // Ensure date is in YYYY-MM-DD format and time is in HH:MM format
+      // Normalize time format - handle HH:MM, HH:MM:SS, or other variations
+      let normalizedTime = selectedSlot.start_time.trim();
+      const timeParts = normalizedTime.split(':');
       
-      // Book the session in the database
+      if (timeParts.length === 2) {
+        // HH:MM format - add seconds
+        normalizedTime = `${normalizedTime}:00`;
+      } else if (timeParts.length === 3) {
+        // HH:MM:SS format - use as is
+        normalizedTime = normalizedTime;
+      } else {
+        throw new Error(`Invalid time format: ${selectedSlot.start_time}. Expected HH:MM or HH:MM:SS`);
+      }
+      
+      const dateTimeString = `${selectedSlot.date}T${normalizedTime}`;
+      console.log('Parsing datetime string:', dateTimeString, {
+        originalTime: selectedSlot.start_time,
+        normalizedTime: normalizedTime,
+        timeParts: timeParts.length
+      });
+      
+      const startDate = new Date(dateTimeString);
+      console.log('Parsed date object:', startDate);
+      
+      if (isNaN(startDate.getTime())) {
+        throw new Error(`Invalid date/time format: ${dateTimeString}. Check date (YYYY-MM-DD) and time (HH:MM) formats`);
+      }
+      
+      const startTs = startDate.getTime();
+      const durationMs = duration * 60 * 1000;
+      const endTs = startTs + durationMs;
+      
+      console.log('Session timing:', {
+        dateTimeString,
+        startDate: startDate.toISOString(),
+        startTs,
+        endTs,
+        duration: duration,
+        durationMs,
+        isValidStart: !isNaN(startTs),
+        isValidEnd: !isNaN(endTs)
+      });
+
+      // Additional validation
+      if (isNaN(startTs) || isNaN(endTs)) {
+        throw new Error(`Invalid timestamps: startTs=${startTs}, endTs=${endTs}`);
+      }
+
+      // Create and execute blockchain transaction for booking proof NFT
+      const tx = new Transaction();
+      
+      // Mint soulbound booking proof NFT
+      console.log('Creating moveCall with:', {
+        target: CONTRACT_FUNCTIONS.mintBookingProof || `${process.env.NEXT_PUBLIC_PACKAGE_ID}::booking_proof::mint_booking_proof`,
+        therapistId: therapistIdFromWallet,
+        therapistIdLength: therapistIdFromWallet.length,
+        therapistIdFormat: therapistIdFromWallet.startsWith('0x'),
+        startTs: startTs,
+        endTs: endTs,
+        startTsType: typeof startTs,
+        endTsType: typeof endTs
+      });
+
+      // Additional validation of the therapist ID
+      console.log('🔍 Validating therapist ID for smart contract:', {
+        id: therapistIdFromWallet,
+        isValidFormat: /^0x[a-fA-F0-9]{64}$/.test(therapistIdFromWallet),
+        length: therapistIdFromWallet.length,
+        sample: therapistIdFromWallet.slice(0, 20) + '...'
+      });
+
+      // Use a local variable for the actual NFT object ID to use in the transaction
+      let actualTherapistNftId = therapistIdFromWallet;
+
+      // Try to query the object to see if it exists and what type it is
+      try {
+        const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+        const objectInfo = await suiClient.getObject({
+          id: therapistIdFromWallet,
+          options: {
+            showType: true,
+            showContent: true,
+            showOwner: true
+          }
+        });
+        
+        console.log('🔍 Direct object query result:', {
+          exists: !!objectInfo.data,
+          type: objectInfo.data?.type,
+          owner: objectInfo.data?.owner,
+          objectId: objectInfo.data?.objectId,
+          hasContent: !!objectInfo.data?.content,
+          error: objectInfo.error
+        });
+        
+        if (!objectInfo.data) {
+          throw new Error(`Therapist NFT object ${therapistIdFromWallet} does not exist or cannot be accessed`);
+        }
+        
+        if (!objectInfo.data.type?.includes('therapist_nft::TherapistNFT')) {
+          console.warn('⚠️ Object exists but is not a TherapistNFT:', objectInfo.data.type);
+          throw new Error(`Object ${therapistIdFromWallet} is type ${objectInfo.data.type}, not TherapistNFT`);
+        }
+
+        // Check if this object is owned properly
+        console.log('🔍 Object ownership details:', {
+          owner: objectInfo.data.owner,
+          ownerType: typeof objectInfo.data.owner,
+          isOwnedObject: objectInfo.data.owner && typeof objectInfo.data.owner === 'object' && 'AddressOwner' in objectInfo.data.owner,
+          isSharedObject: objectInfo.data.owner && typeof objectInfo.data.owner === 'object' && 'Shared' in objectInfo.data.owner,
+          isImmutable: objectInfo.data.owner && typeof objectInfo.data.owner === 'object' && 'Immutable' in objectInfo.data.owner
+        });
+        
+      } catch (objectQueryError) {
+        console.error('❌ Failed to query therapist object:', objectQueryError);
+        
+        // Try an alternative approach - look for TherapistNFTs in owned objects
+        console.log('🔄 Trying alternative approach - checking owned objects...');
+        try {
+          const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+          const ownedObjects = await suiClient.getOwnedObjects({
+            owner: walletAddr,
+            options: {
+              showType: true,
+              showContent: true,
+            },
+          });
+          
+          console.log('🔍 All owned objects by current user:', ownedObjects.data?.map(obj => ({
+            id: obj.data?.objectId,
+            type: obj.data?.type
+          })));
+          
+          // Look for any TherapistNFT objects owned by the current user (support both old and new package IDs)
+          const userTherapistNFTs = ownedObjects.data?.filter(obj => 
+            obj.data?.type?.includes('therapist_nft::TherapistNFT')
+          );
+          
+          if (userTherapistNFTs && userTherapistNFTs.length > 0) {
+            const userNFT = userTherapistNFTs[0];
+            console.log('🎯 Found TherapistNFT owned by current user:', userNFT.data?.objectId);
+            
+            // Verify this NFT is directly owned (not in kiosk)
+            if (userNFT.data?.owner && typeof userNFT.data.owner === 'object' && 'AddressOwner' in userNFT.data.owner) {
+              actualTherapistNftId = userNFT.data.objectId;
+              console.log('✅ Using directly owned NFT for transaction:', actualTherapistNftId);
+            } else {
+              console.warn('⚠️ User NFT is not directly owned:', userNFT.data?.owner);
+              throw new Error(`User's TherapistNFT is not directly owned (owner: ${JSON.stringify(userNFT.data?.owner)})`);
+            }
+          } else {
+            // Try using a test NFT ID similar to test-client-side
+            console.log('🧪 No user NFTs found, trying with test NFT ID...');
+            actualTherapistNftId = "0x68f71cedbae4b2a652ad160bdf2fd1e8111b8c0c0ee9c5cee58a53c5da856cef";
+            console.log('🧪 Using test NFT ID for debugging:', actualTherapistNftId);
+          }
+        } catch (altError) {
+          throw new Error(`Both primary and alternative NFT lookup failed: ${objectQueryError} | ${altError}`);
+        }
+      }
+
+      // ✅ Implement payment flow: 90% to therapist, 10% to service provider
+      const sessionPriceSui = selectedSlot.price_sui;
+      const sessionPriceMist = BigInt(sessionPriceSui * 1_000_000_000); // Convert SUI to MIST
+      
+      // Calculate splits (90% to therapist, 10% to service provider)
+      const therapistShare = (sessionPriceMist * BigInt(90)) / BigInt(100); // 90%
+      const serviceProviderShare = sessionPriceMist - therapistShare; // 10%
+
+      console.log('🚀 Final transaction details:', {
+        actualTherapistNftId: actualTherapistNftId,
+        startTs: startTs,
+        endTs: endTs,
+        target: CONTRACT_FUNCTIONS.mintBookingProof || `${process.env.NEXT_PUBLIC_PACKAGE_ID}::booking_proof::mint_booking_proof`,
+        packageId: process.env.NEXT_PUBLIC_PACKAGE_ID,
+        sessionPriceSui: sessionPriceSui,
+        therapistShare: Number(therapistShare) / 1_000_000_000,
+        serviceProviderShare: Number(serviceProviderShare) / 1_000_000_000
+      });
+      
+      console.log('💰 Payment breakdown:', {
+        totalSui: sessionPriceSui,
+        totalMist: sessionPriceMist.toString(),
+        therapistShareSui: Number(therapistShare) / 1_000_000_000,
+        therapistShareMist: therapistShare.toString(),
+        serviceProviderShareSui: Number(serviceProviderShare) / 1_000_000_000,
+        serviceProviderShareMist: serviceProviderShare.toString(),
+        therapistWallet: therapist.wallet_address,
+        serviceProviderWallet: '0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba44e38d5d23130106b'
+      });
+
+      // Create payment coins
+      const [therapistPayment] = tx.splitCoins(tx.gas, [therapistShare]);
+      const [serviceProviderPayment] = tx.splitCoins(tx.gas, [serviceProviderShare]);
+      
+      // Transfer payments
+      if (therapist.wallet_address) {
+        tx.transferObjects([therapistPayment], therapist.wallet_address);
+        console.log(`💸 Transferring ${Number(therapistShare) / 1_000_000_000} SUI to therapist: ${therapist.wallet_address}`);
+      } else {
+        throw new Error('Therapist wallet address not available');
+      }
+      
+      tx.transferObjects([serviceProviderPayment], '0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba44e38d5d23130106b');
+      console.log(`💸 Transferring ${Number(serviceProviderShare) / 1_000_000_000} SUI to service provider: 0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba44e38d5d23130106b`);
+
+      // ✅ Smart contract has been updated with mint_booking_proof_by_id function
+      // This function accepts TherapistNFT object IDs instead of references, making it compatible with kiosk-stored NFTs
+      console.log('✅ Using new mint_booking_proof_by_id function that works with kiosk-stored TherapistNFTs');
+
+      tx.moveCall({
+        target: CONTRACT_FUNCTIONS.mintBookingProofById,
+        arguments: [
+          tx.pure.id(actualTherapistNftId), // ✅ Pass as ID, not object reference - works with kiosk-stored NFTs
+          tx.pure.u64(BigInt(startTs)),     
+          tx.pure.u64(BigInt(endTs))        
+        ],
+      });
+
+      console.log('Executing blockchain transaction for booking proof...');
+      
+      // Execute the blockchain transaction
+      signAndExecuteTransaction(
+        { transaction: tx },
+        {
+          onSuccess: async (result: any) => {
+            console.log("Booking proof NFT minted successfully:", result);
+            console.log("Transaction result:", JSON.stringify(result, null, 2));
+            
+            // Extract booking proof NFT ID from transaction result
+            let bookingProofId = 'Unknown';
+            try {
+              if (result.objectChanges && result.objectChanges.length > 0) {
+                console.log("Object changes found:", result.objectChanges);
+                
+                const createdObject = result.objectChanges.find((change: any) => 
+                  change.type === 'created' && 
+                  change.objectType && 
+                  (change.objectType.includes('BookingProofNFT') ||
+                   change.objectType.includes('booking_proof'))
+                );
+                
+                if (createdObject) {
+                  bookingProofId = createdObject.objectId;
+                  console.log("Found booking proof NFT ID:", bookingProofId);
+                  setBookingProofNftId(bookingProofId);
+                }
+              }
+            } catch (extractError) {
+              console.warn('Could not extract booking proof NFT ID:', extractError);
+            }
+
+            // Set transaction hash from blockchain result
+            setTransactionHash(result.digest);
+
+            // Now proceed with database booking
+            try {
       const bookingData: BookingData = {
         client_wallet: walletAddr,
-        transaction_hash: mockTxHash,
+                transaction_hash: result.digest,
         payment_status: 'completed'
       };
       
       const bookingResult = await SessionService.bookSession(selectedSlot.id, bookingData);
       
       if (!bookingResult.success) {
-        throw new Error(bookingResult.error || 'Booking failed');
+                throw new Error(bookingResult.error || 'Database booking failed');
       }
       
       if (bookingResult.bookedSession) {
@@ -209,11 +548,30 @@ export default function TherapistBookingPage() {
       setShowSuccessModal(true);
       setRedirectCountdown(3);
       
-      console.log('Session booking successful:', {
-        amount: selectedSlot.price_sui,
-        therapist: walletAddress,
-        booking: bookingResult.bookedSession
-      });
+                            console.log('Complete booking successful:', {
+                totalAmount: selectedSlot.price_sui,
+                therapistShare: `${Number(therapistShare) / 1_000_000_000} SUI`,
+                serviceProviderShare: `${Number(serviceProviderShare) / 1_000_000_000} SUI`,
+                therapistWallet: therapist.wallet_address,
+                serviceProviderWallet: '0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba44e38d5d23130106b',
+                bookingProofNFT: bookingProofId,
+                transactionHash: result.digest,
+                booking: bookingResult.bookedSession
+              });
+              
+            } catch (dbError) {
+              console.error('Database booking failed after NFT mint:', dbError);
+              setPaymentError(`Booking proof NFT created (${bookingProofId}) but database booking failed: ${dbError}`);
+              setPurchasing(false);
+            }
+          },
+          onError: (error: any) => {
+            console.error('Blockchain transaction failed:', error);
+            setPaymentError(`Failed to mint booking proof NFT: ${error.message || error}`);
+            setPurchasing(false);
+          }
+        }
+      );
       
     } catch (error: any) {
       console.error('Booking failed:', error);
@@ -478,7 +836,7 @@ export default function TherapistBookingPage() {
                       }`}
                     >
                       <div className="text-center">
-                        <div className="text-xs font-medium">{formatTime(`${slot.date}T${slot.start_time}Z`)}</div>
+                        <div className="text-xs font-medium">{formatTime(slot.start_time)}</div>
                         {slot.status === 'booked' && (
                           <div className="text-xs text-red-400">Booked</div>
                         )}
@@ -511,7 +869,7 @@ export default function TherapistBookingPage() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Time:</span>
-                      <p className="font-medium">{formatTime(`${selectedSlot.date}T${selectedSlot.start_time}Z`)} - {formatTime(`${selectedSlot.date}T${selectedSlot.end_time}Z`)}</p>
+                      <p className="font-medium">{formatTime(selectedSlot.start_time)} - {formatTime(selectedSlot.end_time)}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Therapist:</span>
@@ -662,7 +1020,7 @@ export default function TherapistBookingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Time:</span>
-                    <span className="font-medium">{formatTime(`${bookedNFT.date}T${bookedNFT.start_time}Z`)} - {formatTime(`${bookedNFT.date}T${bookedNFT.end_time}Z`)}</span>
+                    <span className="font-medium">{formatTime(bookedNFT.start_time)} - {formatTime(bookedNFT.end_time)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Meeting:</span>

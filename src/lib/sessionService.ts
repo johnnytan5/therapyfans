@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { generateMeetingLink, generateMeetingRoomId } from './meetingLinks';
+import { generateMeetingId, generateMeetingRoomId } from './meetingLinks';
 
 // Database interfaces matching our schema
 export interface AvailableSession {
@@ -12,6 +12,7 @@ export interface AvailableSession {
   price_sui: number;
   status: 'available' | 'booked' | 'cancelled' | 'completed';
   meeting_room_id: string;
+  meeting_link: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,7 @@ export interface SessionNFT {
   date: string;
   start_time: string;
   end_time: string;
+  duration_minutes: number;
   price_sui: number;
   status: 'available' | 'booked' | 'completed';
   nft_token_id?: string;
@@ -109,6 +111,7 @@ export class SessionService {
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
+        meeting_link: session.meeting_link || undefined,
       }));
     } catch (error) {
       console.error('Error in getAvailableSessionsByTherapist:', error);
@@ -156,6 +159,7 @@ export class SessionService {
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
+        meeting_link: session.meeting_link || undefined,
       }));
 
       console.log('🔍 SessionService: Mapped sessions:', mapped);
@@ -219,14 +223,29 @@ export class SessionService {
         return { success: false, error: 'Session not available' };
       }
 
-      // Generate NFT and meeting data
+      // Generate NFT and ensure we use the existing unique meeting ID from available_sessions
       const nftTokenId = `token-${sessionId}-${Math.random().toString(36).substr(2, 5)}`;
-      const meetingLink = generateMeetingLink(
-        sessionId,
-        availableSession.therapist_wallet,
-        availableSession.date,
-        availableSession.start_time
-      );
+      let meetingId: string | null = availableSession.meeting_link;
+
+      // If the session was created before meeting IDs were stored, generate once and persist it
+      if (!meetingId) {
+        meetingId = generateMeetingId(
+          sessionId,
+          availableSession.therapist_wallet,
+          availableSession.date,
+          availableSession.start_time
+        );
+
+        // Best-effort update of available_sessions to store the generated meeting ID
+        try {
+          await supabase
+            .from('available_sessions')
+            .update({ meeting_link: meetingId, updated_at: new Date().toISOString() })
+            .eq('id', sessionId);
+        } catch (e) {
+          console.warn('Could not persist generated meetingId to available_sessions:', e);
+        }
+      }
 
       // Create the booking record
       const bookingId = `booking-${sessionId}-${Date.now()}`;
@@ -245,7 +264,7 @@ export class SessionService {
         session_status: 'upcoming',
         nft_token_id: nftTokenId,
         meeting_room_id: availableSession.meeting_room_id,
-        meeting_link: meetingLink,
+        meeting_link: meetingId!,
         booked_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -314,7 +333,7 @@ export class SessionService {
         price_sui: availableSession.price_sui,
         status: 'booked',
         nft_token_id: nftTokenId,
-        meeting_link: meetingLink,
+        meeting_link: meetingId!,
         meeting_room_id: availableSession.meeting_room_id,
         client_wallet: bookingData.client_wallet,
         purchased_at: bookedSession.booked_at,

@@ -12,7 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const PACKAGE_ID = "0x7dee12dcb0e9afc507ef32e7741f18009f30ffbabe9fabdf53c2a4331793a76e";
-const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') });
+import { PACKAGE_ID, CONTRACT_FUNCTIONS, SUI_TYPES } from '@/lib/suiConfig';
+const suiClient = new SuiClient({ url: getFullnodeUrl('testnet') }); // or 'mainnet'
+
 
 export default function TherapistTestPage() {
   const account = useCurrentAccount();
@@ -211,7 +213,7 @@ export default function TherapistTestPage() {
       const tx = new Transaction();
       
       tx.moveCall({
-        target: `${PACKAGE_ID}::therapist_nft::mint`,
+        target: CONTRACT_FUNCTIONS.mintTherapistNft,
         arguments: [
             tx.pure.string(nftForm.name),
             tx.pure.string(nftForm.specialization),
@@ -270,6 +272,17 @@ export default function TherapistTestPage() {
     
     startLoading("fetchNfts");
     setError(null);
+    // Get all objects owned by the user
+    const ownedObjects = await suiClient.getOwnedObjects({
+      owner: account.address,
+      filter: {
+        StructType: SUI_TYPES.therapistNft
+      },
+      options: {
+        showContent: true,
+        showType: true,
+      }
+    });
 
     try {
       console.log("Fetching NFTs for address:", account.address);

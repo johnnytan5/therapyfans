@@ -1,8 +1,9 @@
 import { supabase } from './supabase';
+import { generateMeetingId } from './meetingLinks';
 
 export interface TherapistWithSpecializations {
   id: string;
-  wallet_address: string;
+  wallet_address: string | null;
   full_name: string;
   profile_picture_url: string | null;
   bio: string | null;
@@ -29,6 +30,7 @@ export interface AvailableSession {
   end_time?: string | null;
   duration_minutes: number | null; // always 30 in your schema
   price_sui: number | null;
+  meeting_link?: string | null;
   created_at: string;
 }
 
@@ -89,8 +91,8 @@ export async function loadTherapistSessions(therapistId: string, therapistWallet
       const dateStr: string | null = row.date || null;
       const startTime: string | null = row.start_time || null; // HH:MM:SS
       const endTime: string | null = row.end_time || null;
-      const start = dateStr && startTime ? new Date(`${dateStr}T${startTime}Z`).toISOString() : (row.scheduled_at || row.scheduled_time || null);
-      const end = dateStr && endTime ? new Date(`${dateStr}T${endTime}Z`).toISOString() : (endTime || (start ? new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString() : null));
+      const start = dateStr && startTime ? new Date(`${dateStr}T${startTime}`).toISOString() : (row.scheduled_at || row.scheduled_time || null);
+      const end = dateStr && endTime ? new Date(`${dateStr}T${endTime}`).toISOString() : (endTime || (start ? new Date(new Date(start).getTime() + 30 * 60 * 1000).toISOString() : null));
       const duration = row.duration_minutes ?? 30; // standard fixed duration
       const price = row.price_sui ?? row.price ?? null;
       const created = row.created_at ?? new Date().toISOString();
@@ -102,6 +104,7 @@ export async function loadTherapistSessions(therapistId: string, therapistWallet
         end_time: end,
         duration_minutes: typeof duration === 'number' ? duration : (duration ? Number(duration) : null),
         price_sui: typeof price === 'number' ? price : (price ? Number(price) : null),
+        meeting_link: row.meeting_link ?? null,
         created_at: created,
       };
     };
@@ -156,14 +159,17 @@ export async function createAvailableSession(params: {
     const createdAt = new Date().toISOString();
     const startISO = params.scheduledAt;
     const startDate = new Date(startISO);
-    // Build date (YYYY-MM-DD) and time (HH:MM:SS) parts to match table types
-    const dateStr = startDate.toISOString().slice(0, 10);
-    const hh = startDate.getUTCHours().toString().padStart(2, '0');
-    const mm = startDate.getUTCMinutes().toString().padStart(2, '0');
+    // Build date (YYYY-MM-DD) and time (HH:MM:SS) parts using local time (Malaysia timezone)
+    const year = startDate.getFullYear();
+    const month = (startDate.getMonth() + 1).toString().padStart(2, '0');
+    const day = startDate.getDate().toString().padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    const hh = startDate.getHours().toString().padStart(2, '0');
+    const mm = startDate.getMinutes().toString().padStart(2, '0');
     const startTime = `${hh}:${mm}:00`;
     const endDate = new Date(startDate.getTime() + 30 * 60 * 1000);
-    const eh = endDate.getUTCHours().toString().padStart(2, '0');
-    const em = endDate.getUTCMinutes().toString().padStart(2, '0');
+    const eh = endDate.getHours().toString().padStart(2, '0');
+    const em = endDate.getMinutes().toString().padStart(2, '0');
     const endTime = `${eh}:${em}:00`;
 
     const meetingRoomId = `room-${dateStr.replace(/-/g, '')}-${hh}${mm}`; // room-name-YYMMDD-time
@@ -172,6 +178,15 @@ export async function createAvailableSession(params: {
     const walletKey = (therapistWallet || '').replace(/^0x/, '').slice(-8);
     const slotId = `slot-${dateStr.replace(/-/g, '')}-${hh}${mm}-${walletKey}`;
     const priceValue = typeof params.priceSui === 'number' ? params.priceSui : 5; // ensure NOT NULL
+    
+    // Generate unique meeting ID for this session
+    const meetingId = generateMeetingId(
+      slotId,
+      therapistWallet,
+      dateStr,
+      startTime
+    );
+    
     // Try a few column variants to tolerate schema differences
     // Only use therapist_wallet since that's what your table has
     const payload = {
@@ -184,7 +199,7 @@ export async function createAvailableSession(params: {
       status: 'available',
       nft_token_id: null,
       meeting_room_id: meetingRoomId,
-      meeting_link: null,
+      meeting_link: meetingId,
       price_sui: priceValue,
       created_at: createdAt,
       updated_at: createdAt,
@@ -233,6 +248,7 @@ export async function createAvailableSession(params: {
         end_time: end,
         duration_minutes: 30,
         price_sui: data.price_sui ?? null,
+        meeting_link: data.meeting_link ?? null,
         created_at: data.created_at ?? createdAt,
       };
     }
@@ -356,6 +372,56 @@ export async function getTherapistById(id: string): Promise<TherapistWithSpecial
   } catch (error) {
     console.error('Error in getTherapistById:', error);
     return null;
+  }
+}
+
+export async function getTherapistByWalletAddress(walletAddress: string): Promise<TherapistWithSpecializations | null> {
+  try {
+    const { data, error } = await supabase
+      .from('therapists')
+      .select(`
+        *,
+        therapist_specializations!inner(
+          specializations(name)
+        )
+      `)
+      .eq('wallet_address', walletAddress)
+      .eq('is_verified', true)
+      .single();
+
+    if (error) {
+      console.error('Error fetching therapist by wallet:', error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      ...data,
+      specializations: data.therapist_specializations?.map((ts: any) => ts.specializations?.name).filter(Boolean) || [],
+      rating: typeof data.rating === 'number' && !Number.isNaN(data.rating)
+        ? data.rating
+        : null,
+      reviewCount: typeof data.review_count === 'number' && !Number.isNaN(data.review_count)
+        ? data.review_count
+        : null,
+    };
+  } catch (error) {
+    console.error('Error in getTherapistByWalletAddress:', error);
+    return null;
+  }
+}
+
+// Helper function to determine if an ID is a wallet address or UUID
+export function isWalletAddress(id: string): boolean {
+  return id.startsWith('0x') && id.length === 66; // Standard Sui address format
+}
+
+export async function getTherapistByIdOrWallet(identifier: string): Promise<TherapistWithSpecializations | null> {
+  if (isWalletAddress(identifier)) {
+    return getTherapistByWalletAddress(identifier);
+  } else {
+    return getTherapistById(identifier);
   }
 }
 
