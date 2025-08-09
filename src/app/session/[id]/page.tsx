@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createBlurredAvatar } from "@/lib/utils";
+import { useClientProfile } from "@/components/providers/ClientAuthProvider";
 
 interface SessionPageProps {
   params: {
@@ -34,8 +35,13 @@ interface SessionPageProps {
   };
 }
 
-export default async function SessionPage({ params }: SessionPageProps) {
-  const resolvedParams = await params;
+export default function SessionPage({ params }: SessionPageProps) {
+  const [resolvedParams, setResolvedParams] = useState<{id: string} | null>(null);
+  const { client, wallet_address } = useClientProfile();
+
+  useEffect(() => {
+    Promise.resolve(params).then(setResolvedParams);
+  }, [params]);
   const [sessionStatus, setSessionStatus] = useState<"waiting" | "connecting" | "active" | "ended">("waiting");
   const [timeLeft, setTimeLeft] = useState(900); // 15 minutes in seconds
   const [videoEnabled, setVideoEnabled] = useState(true);
@@ -48,9 +54,21 @@ export default async function SessionPage({ params }: SessionPageProps) {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
   // Extract session info from ID
-  const sessionId = resolvedParams.id;
+  const sessionId = resolvedParams?.id || '';
   const therapistId = sessionId.includes('booked-') ? sessionId.replace('booked-session-', '') : 'therapist-1';
   const therapist = mockTherapistsWithProfiles.find(t => t.id === therapistId) || mockTherapistsWithProfiles[0];
+
+  // Show loading if params not resolved yet
+  if (!resolvedParams) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Countdown timer
   useEffect(() => {
@@ -124,7 +142,11 @@ export default async function SessionPage({ params }: SessionPageProps) {
     setIsSubmittingRating(false);
     setShowRatingModal(false);
     // Navigate back to client profile
-    window.location.href = '/client/client-1';
+    if (wallet_address) {
+      window.location.href = `/client/${encodeURIComponent(wallet_address)}`;
+    } else {
+      window.location.href = '/marketplace';
+    }
   };
 
   return (
@@ -400,7 +422,7 @@ export default async function SessionPage({ params }: SessionPageProps) {
             </div>
             
             <Button asChild>
-              <Link href="/client/client-1">
+              <Link href={wallet_address ? `/client/${encodeURIComponent(wallet_address)}` : '/marketplace'}>
                 Return to Dashboard
               </Link>
             </Button>

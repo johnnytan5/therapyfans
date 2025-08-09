@@ -22,15 +22,25 @@ export interface Therapist {
 }
 
 export interface Client {
-  id: string;
+  wallet_address: string; // Primary key - Sui wallet address from zkLogin (ONLY identifier)
   anon_display_name: string | null;
   email: string | null;
+  auth_provider: 'google' | 'facebook' | 'twitch' | null; // zkLogin provider used
+  provider_subject: string | null; // Subject ID from OAuth provider (for zkLogin)
+  timezone: string | null;
+  preferences: string[] | null; // JSON array of preferences
+  vibe_tags: string[] | null; // JSON array of therapy preferences/tags
+  total_sessions: number;
+  total_spent_sui: number; // Total SUI spent on therapy sessions
+  is_verified: boolean; // Account verification status
+  last_login: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Session {
   id: string;
-  client_id: string | null;
+  client_wallet_address: string | null; // Reference to clients.wallet_address
   therapist_id: string | null;
   scheduled_at: string | null;
   duration_minutes: number | null;
@@ -44,7 +54,7 @@ export interface Review {
   id: string;
   session_id: string | null;
   therapist_id: string | null;
-  client_id: string | null;
+  client_wallet_address: string | null; // Reference to clients.wallet_address
   rating: number | null;
   review_text: string | null;
   created_at: string;

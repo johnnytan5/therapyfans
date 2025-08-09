@@ -11,6 +11,33 @@ export interface User {
   };
 }
 
+// Extended Client type for wallet-based authentication
+export interface ClientProfile {
+  wallet_address: string; // Primary key - Sui wallet address (ONLY identifier)
+  anon_display_name: string | null;
+  email: string | null;
+  auth_provider: 'google' | 'facebook' | 'twitch' | null;
+  provider_subject: string | null;
+  timezone: string | null;
+  preferences: string[] | null;
+  vibe_tags: string[] | null;
+  total_sessions: number;
+  total_spent_sui: number;
+  is_verified: boolean;
+  last_login: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Wallet authentication context
+export interface WalletAuthContext {
+  isConnected: boolean;
+  wallet_address: string | null;
+  auth_provider: 'google' | 'facebook' | 'twitch' | null;
+  client_profile: ClientProfile | null;
+  isLoading: boolean;
+}
+
 export interface TherapistProfile {
   user_id: string;
   bio: string;

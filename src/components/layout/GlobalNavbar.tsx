@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ConnectWallet } from "@/components/wallet/ConnectWallet";
+import { EnokiWalletConnect } from "@/components/wallet/EnokiWalletConnect";
+import { useClientProfile } from "@/components/providers/ClientAuthProvider";
 import { 
   Home, 
   Search, 
@@ -29,7 +30,7 @@ interface NavItem {
   isActive?: (pathname: string) => boolean;
 }
 
-const mainNavItems: NavItem[] = [
+const getNavItems = (walletAddress?: string): NavItem[] => [
   {
     label: "Home",
     href: "/",
@@ -44,7 +45,7 @@ const mainNavItems: NavItem[] = [
   },
   {
     label: "My Sessions",
-    href: "/client/client-1", 
+    href: walletAddress ? `/client/${encodeURIComponent(walletAddress)}` : "/marketplace",
     icon: <Calendar className="w-4 h-4" />,
     isActive: (pathname) => pathname.startsWith("/client")
   }
@@ -53,6 +54,9 @@ const mainNavItems: NavItem[] = [
 export function GlobalNavbar() {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { client, wallet_address } = useClientProfile();
+  
+  const navItems = getNavItems(wallet_address || undefined);
 
   // Don't show navbar on active session pages
   if (pathname.includes("/session/") && !pathname.includes("lobby")) {
@@ -78,7 +82,7 @@ export function GlobalNavbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-4">
-              {mainNavItems.map((item) => {
+              {navItems.map((item) => {
                 const isActive = item.isActive ? item.isActive(pathname) : pathname === item.href;
                 
                 return (
@@ -102,7 +106,7 @@ export function GlobalNavbar() {
 
           {/* Right Side Menu */}
           <div className="hidden md:flex items-center space-x-4">
-            <ConnectWallet />
+            <EnokiWalletConnect />
           </div>
 
           {/* Mobile menu button */}
@@ -121,7 +125,7 @@ export function GlobalNavbar() {
         {isMobileMenuOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-border">
-              {mainNavItems.map((item) => {
+              {navItems.map((item) => {
                 const isActive = item.isActive ? item.isActive(pathname) : pathname === item.href;
                 
                 return (
@@ -145,7 +149,7 @@ export function GlobalNavbar() {
               {/* Mobile Connect Wallet */}
               <div className="pt-4 border-t border-border">
                 <div className="px-3 py-2">
-                  <ConnectWallet />
+                  <EnokiWalletConnect />
                 </div>
               </div>
             </div>

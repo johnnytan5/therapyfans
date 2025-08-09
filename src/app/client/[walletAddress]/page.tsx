@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TherapistCard } from "@/components/therapy/TherapistCard";
 import { VibeTag } from "@/components/therapy/VibeTag";
 import { mockUsers, mockSessionsWithDetails, mockTherapistsWithProfiles } from "@/data/mockData";
+import { ClientService } from "@/lib/clientService";
+import { useClientProfile } from "@/components/providers/ClientAuthProvider";
+import { ClientProfile } from "@/types";
 import { 
   User, 
   Calendar, 
@@ -17,39 +20,155 @@ import {
   Eye, 
   Settings,
   Zap,
-  TrendingUp
+  TrendingUp,
+  Wallet,
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatTime, getTimeUntilSession, formatSui } from "@/lib/utils";
+import { CreateProfileModal } from "@/components/client/CreateProfileModal";
 
 interface ClientProfilePageProps {
   params: {
-    id: string;
+    walletAddress: string;
   };
 }
 
 export default function ClientProfilePage({ params }: ClientProfilePageProps) {
-  const [resolvedParams, setResolvedParams] = useState<{id: string} | null>(null);
+  const [resolvedParams, setResolvedParams] = useState<{walletAddress: string} | null>(null);
   const [activeTab, setActiveTab] = useState<"sessions" | "upcoming" | "recommendations">("upcoming");
+  const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [showCreateProfileModal, setShowCreateProfileModal] = useState(false);
+  const { client: authClient, isAuthenticated, wallet_address } = useClientProfile();
+  const loadingRef = useRef(false);
+
+  // Debug: Track renders
+  console.log('🔄 ClientProfilePage render:', {
+    resolvedParams,
+    clientProfile: !!clientProfile,
+    isLoadingProfile,
+    isAuthenticated,
+    wallet_address
+  });
 
   useEffect(() => {
     Promise.resolve(params).then(setResolvedParams);
   }, [params]);
+
+  // Load client profile based on wallet address only
+  useEffect(() => {
+    if (!resolvedParams?.walletAddress || loadingRef.current) return;
+
+    const loadClientProfile = async () => {
+      loadingRef.current = true;
+      setIsLoadingProfile(true);
+      try {
+        // Decode wallet address if URL encoded
+        const walletAddress = decodeURIComponent(resolvedParams.walletAddress);
+        
+        // Validate wallet address format (basic check)
+        if (!walletAddress.startsWith('0x') || walletAddress.length < 10) {
+          console.error('Invalid wallet address format:', walletAddress);
+          setClientProfile(null);
+          return;
+        }
+
+        console.log('🔍 Loading profile for wallet:', walletAddress);
+
+        // Fetch profile by wallet address (primary key)
+        const profile = await ClientService.getClientByWalletAddress(walletAddress);
+        
+        if (profile) {
+          console.log('✅ Profile found:', profile);
+          // Only update if the profile is different to prevent flickering
+          setClientProfile(prev => {
+            if (prev?.wallet_address !== profile.wallet_address) {
+              return profile;
+            }
+            return prev || profile; // Use profile if prev is null
+          });
+        } else {
+          console.log('❌ No profile found for wallet:', walletAddress);
+          setClientProfile(null);
+        }
+      } catch (error) {
+        console.error('💥 Error loading client profile:', error);
+        setClientProfile(null);
+      } finally {
+        setIsLoadingProfile(false);
+        loadingRef.current = false;
+      }
+    };
+
+    loadClientProfile();
+  }, [resolvedParams?.walletAddress]);
   
-  if (!resolvedParams) {
+  if (!resolvedParams || isLoadingProfile) {
     return <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid pt-20 flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">Loading profile...</p>
       </div>
     </div>;
   }
 
-  // Mock client data (in real app, fetch from API based on params.id)
-  const client = mockUsers.find(u => u.id === resolvedParams.id && u.role === 'client') || mockUsers[0];
+  if (!clientProfile) {
+    return <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid pt-20 flex items-center justify-center">
+      <div className="text-center max-w-md mx-auto">
+        <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-foreground mb-2">Profile Not Found</h2>
+        <p className="text-muted-foreground mb-4">
+          No profile found for wallet address: 
+          <br />
+          <code className="text-xs bg-muted px-2 py-1 rounded mt-2 inline-block">
+            {resolvedParams?.walletAddress}
+          </code>
+        </p>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            This wallet address hasn't been registered yet. {isAuthenticated && wallet_address === resolvedParams?.walletAddress 
+              ? "Create your profile to get started!" 
+              : "Connect your wallet to create a profile automatically."}
+          </p>
+          <div className="flex gap-3 justify-center">
+            {isAuthenticated && wallet_address === resolvedParams?.walletAddress ? (
+              <>
+                <Button 
+                  onClick={() => setShowCreateProfileModal(true)}
+                  className="border-glow hover:glow-purple"
+                >
+                  Create My Profile
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/marketplace">Browse Therapists</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button asChild variant="outline">
+                  <Link href="/marketplace">Browse Therapists</Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/">Go Home</Link>
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // Check if this is the authenticated user's own profile
+  const isOwnProfile = isAuthenticated && authClient?.wallet_address === clientProfile.wallet_address;
   
-  // Get client's sessions
-  const clientSessions = mockSessionsWithDetails.filter(s => s.client_id === client.id);
+  // Get client's sessions (filtered by wallet address)
+  // Note: In production, you'd query sessions by client_wallet_address
+  const clientSessions = mockSessionsWithDetails.filter(s => 
+    // For now, we'll match against a mock client ID derived from wallet
+    s.client_id === `client-${clientProfile.wallet_address.slice(-8)}`
+  );
   const pastSessions = clientSessions.filter(s => s.status === 'completed');
   const upcomingSessions = clientSessions.filter(s => s.status === 'scheduled');
   
@@ -64,17 +183,19 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-foreground">
-                My <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">Profile</span>
+                {isOwnProfile ? 'My' : `${clientProfile.anon_display_name}'s`} <span className="bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">Profile</span>
               </h1>
               <p className="text-lg text-muted-foreground mt-2">
-                Anonymous therapy dashboard
+                {isOwnProfile ? 'Anonymous therapy dashboard' : 'Client profile'}
               </p>
             </div>
             
-            <Button variant="outline" size="sm" className="border-glow hover:glow-purple transition-all duration-200">
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
-            </Button>
+            {isOwnProfile && (
+              <Button variant="outline" size="sm" className="border-glow hover:glow-purple transition-all duration-200">
+                <Settings className="w-4 h-4 mr-2" />
+                Settings
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -89,42 +210,68 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 <div className="mx-auto w-20 h-20 bg-gradient-to-br from-purple-400 to-blue-500 rounded-full flex items-center justify-center mb-4">
                   <User className="w-8 h-8 text-white" />
                 </div>
-                <CardTitle className="text-xl">{client.alias}</CardTitle>
-                <Badge variant="outline" className="mx-auto">
-                  <Eye className="w-3 h-3 mr-1" />
-                  Anonymous Client
-                </Badge>
+                <CardTitle className="text-xl">{clientProfile.anon_display_name}</CardTitle>
+                <div className="flex flex-col items-center gap-2">
+                  <Badge variant="outline" className="mx-auto">
+                    <Eye className="w-3 h-3 mr-1" />
+                    Anonymous Client
+                  </Badge>
+                  {clientProfile.auth_provider && (
+                    <Badge variant="secondary" className="mx-auto text-xs">
+                      {clientProfile.auth_provider} zkLogin
+                    </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-center">
+                <div className="text-center space-y-1">
                   <p className="text-sm text-muted-foreground">
-                    Member since {formatDate(client.created_at)}
+                    Member since {formatDate(clientProfile.created_at)}
                   </p>
+                  {isOwnProfile && (
+                    <p className="text-xs text-muted-foreground font-mono">
+                      Wallet: {clientProfile.wallet_address.slice(0, 6)}...{clientProfile.wallet_address.slice(-4)}
+                    </p>
+                  )}
                 </div>
                 
                 {/* Client Tags/Preferences */}
-                {client.metadata?.vibe_tags && (
+                {clientProfile.vibe_tags && clientProfile.vibe_tags.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      My Tags
+                      {isOwnProfile ? 'My Tags' : 'Tags'}
                     </h4>
                     <div className="flex flex-wrap gap-1">
-                      {client.metadata.vibe_tags.map((tag) => (
+                      {clientProfile.vibe_tags.map((tag) => (
                         <VibeTag key={tag} tag={tag} variant="outline" />
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Privacy Notice */}
-                <div className="p-3 glass rounded-lg border border-purple-500/30 glow-purple">
-                  <div className="flex items-center gap-2 text-purple-400">
-                    <Shield className="w-4 h-4" />
-                    <span className="text-sm font-medium">100% Anonymous</span>
+                {/* Wallet & Privacy Info */}
+                <div className="space-y-3">
+                  {isOwnProfile && (
+                    <div className="p-3 glass rounded-lg border border-blue-500/30 glow-blue">
+                      <div className="flex items-center gap-2 text-blue-400">
+                        <Wallet className="w-4 h-4" />
+                        <span className="text-sm font-medium">Sui Wallet Connected</span>
+                      </div>
+                      <p className="text-xs text-blue-300 mt-1">
+                        Balance tracked • zkLogin authenticated
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="p-3 glass rounded-lg border border-purple-500/30 glow-purple">
+                    <div className="flex items-center gap-2 text-purple-400">
+                      <Shield className="w-4 h-4" />
+                      <span className="text-sm font-medium">100% Anonymous</span>
+                    </div>
+                    <p className="text-xs text-purple-300 mt-1">
+                      Identity protected by zkLogin technology
+                    </p>
                   </div>
-                  <p className="text-xs text-purple-300 mt-1">
-                    Your identity is protected by zkLogin technology
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -140,7 +287,9 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 glass rounded-lg border border-blue-500/30 glow-blue">
-                    <div className="text-2xl font-bold text-blue-400">{pastSessions.length}</div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      {clientProfile.total_sessions || pastSessions.length}
+                    </div>
                     <div className="text-xs text-blue-300">Sessions Completed</div>
                   </div>
                   <div className="text-center p-3 glass rounded-lg border border-green-500/30 glow-green">
@@ -151,10 +300,20 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 
                 <div className="text-center p-3 glass rounded-lg border border-purple-500/30 glow-purple">
                   <div className="text-lg font-bold text-purple-400">
-                    {formatSui(pastSessions.length * 5)}
+                    {formatSui(clientProfile.total_spent_sui || pastSessions.length * 5)}
                   </div>
                   <div className="text-xs text-purple-300">Total Investment in Wellness</div>
                 </div>
+
+                {/* Additional Stats for Own Profile */}
+                {isOwnProfile && clientProfile.last_login && (
+                  <div className="text-center p-3 glass rounded-lg border border-cyan-500/30 glow-cyan">
+                    <div className="text-sm font-medium text-cyan-400">Last Active</div>
+                    <div className="text-xs text-cyan-300 mt-1">
+                      {formatDate(clientProfile.last_login)}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -353,6 +512,17 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
           </div>
         </div>
       </div>
+      
+      {/* Create Profile Modal */}
+      <CreateProfileModal
+        isOpen={showCreateProfileModal}
+        onClose={() => setShowCreateProfileModal(false)}
+        onSuccess={() => {
+          setShowCreateProfileModal(false);
+          // Refresh the page to load the new profile
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }
