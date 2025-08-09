@@ -117,18 +117,18 @@ export class SessionService {
   }
 
   /**
-   * Get all available sessions for a therapist (next 7 days)
+   * Get all available sessions for a therapist (next 30 days)
    */
   static async getAllAvailableSessionsForTherapist(therapistWallet: string): Promise<SessionNFT[]> {
     try {
       const today = new Date();
-      const nextWeek = new Date();
-      nextWeek.setDate(today.getDate() + 7);
+      const nextMonth = new Date(); // Changed from nextWeek to nextMonth
+      nextMonth.setDate(today.getDate() + 30); // Extended to 30 days
       const todayStr = today.toISOString().split('T')[0];
-      const nextWeekStr = nextWeek.toISOString().split('T')[0];
+      const nextMonthStr = nextMonth.toISOString().split('T')[0];
 
       console.log('🔍 SessionService: Querying available sessions for therapist:', therapistWallet);
-      console.log('🔍 SessionService: Date range:', todayStr, 'to', nextWeekStr);
+      console.log('🔍 SessionService: Date range:', todayStr, 'to', nextMonthStr);
 
       const { data, error } = await supabase
         .from('available_sessions')
@@ -136,7 +136,7 @@ export class SessionService {
         .eq('therapist_wallet', therapistWallet)
         .eq('status', 'available')
         .gte('date', todayStr)
-        .lte('date', nextWeekStr)
+        .lte('date', nextMonthStr)
         .order('date', { ascending: true })
         .order('start_time', { ascending: true });
 

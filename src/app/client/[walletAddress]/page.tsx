@@ -304,30 +304,7 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                   </div>
                 )}
 
-                {/* Wallet & Privacy Info */}
-                <div className="space-y-3">
-                  {isOwnProfile && (
-                    <div className="p-3 glass rounded-lg border border-blue-500/30 glow-blue">
-                      <div className="flex items-center gap-2 text-blue-400">
-                        <Wallet className="w-4 h-4" />
-                        <span className="text-sm font-medium">Sui Wallet Connected</span>
-                      </div>
-                      <p className="text-xs text-blue-300 mt-1">
-                        Balance tracked • zkLogin authenticated
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="p-3 glass rounded-lg border border-purple-500/30 glow-purple">
-                    <div className="flex items-center gap-2 text-purple-400">
-                      <Shield className="w-4 h-4" />
-                      <span className="text-sm font-medium">100% Anonymous</span>
-                    </div>
-                    <p className="text-xs text-purple-300 mt-1">
-                      Identity protected by zkLogin technology
-                    </p>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
 

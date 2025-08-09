@@ -12,12 +12,10 @@ import { Transaction } from '@mysten/sui/transactions';
 import { getTherapistById, TherapistWithSpecializations, getDisplayName } from "@/lib/therapistService";
 import { 
   SessionNFT, 
-  formatTime, 
-  formatDate, 
   getDayName 
 } from "@/lib/meetingLinks";
 import { SessionService, BookingData } from "@/lib/sessionService";
-import { createBlurredAvatar, formatSui, mistToSui } from "@/lib/utils";
+import { createBlurredAvatar, formatSui, mistToSui, formatTime, formatDate } from "@/lib/utils";
 
 // SUI Network constants
 const MIST_PER_SUI = 1_000_000_000;
@@ -480,7 +478,7 @@ export default function TherapistBookingPage() {
                       }`}
                     >
                       <div className="text-center">
-                        <div className="text-xs font-medium">{formatTime(slot.start_time)}</div>
+                        <div className="text-xs font-medium">{formatTime(`${slot.date}T${slot.start_time}Z`)}</div>
                         {slot.status === 'booked' && (
                           <div className="text-xs text-red-400">Booked</div>
                         )}
@@ -513,7 +511,7 @@ export default function TherapistBookingPage() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Time:</span>
-                      <p className="font-medium">{formatTime(selectedSlot.start_time)} - {formatTime(selectedSlot.end_time)}</p>
+                      <p className="font-medium">{formatTime(`${selectedSlot.date}T${selectedSlot.start_time}Z`)} - {formatTime(`${selectedSlot.date}T${selectedSlot.end_time}Z`)}</p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Therapist:</span>
@@ -664,7 +662,7 @@ export default function TherapistBookingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Time:</span>
-                    <span className="font-medium">{formatTime(bookedNFT.start_time)} - {formatTime(bookedNFT.end_time)}</span>
+                    <span className="font-medium">{formatTime(`${bookedNFT.date}T${bookedNFT.start_time}Z`)} - {formatTime(`${bookedNFT.date}T${bookedNFT.end_time}Z`)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Meeting:</span>
