@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { VibeTag } from "@/components/therapy/VibeTag";
-import { mockTherapistsWithProfiles, mockWalletData } from "@/data/mockData";
+import { getTherapistById, TherapistWithSpecializations } from "@/lib/therapistService";
 import { 
   ArrowLeft, 
   Wallet, 
@@ -22,7 +22,7 @@ import {
   Gift
 } from "lucide-react";
 import Link from "next/link";
-import { createBlurredAvatar, formatSui, truncateAddress } from "@/lib/utils";
+import { formatSui, truncateAddress } from "@/lib/utils";
 
 interface PurchasePageProps {
   params: {
@@ -49,14 +49,63 @@ export default function PurchasePage({ params, searchParams }: PurchasePageProps
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentComplete, setPaymentComplete] = useState(false);
   const [sessionNftId, setSessionNftId] = useState("");
+  const [therapist, setTherapist] = useState<TherapistWithSpecializations | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Extract therapist ID from sessionId (format: "session-therapist-1")
   const therapistId = resolvedParams?.sessionId?.replace('session-', '') || '';
-  const therapist = mockTherapistsWithProfiles.find(t => t.id === therapistId) || mockTherapistsWithProfiles[0];
   
   const selectedTime = resolvedSearchParams?.time || "14:00";
-  const sessionPrice = 5.0;
   const sessionDate = new Date().toISOString().split('T')[0]; // Today's date
+
+  // Fetch therapist data
+  useEffect(() => {
+    async function fetchTherapist() {
+      if (!therapistId) return;
+      
+      setLoading(true);
+      try {
+        const therapistData = await getTherapistById(therapistId);
+        setTherapist(therapistData);
+      } catch (error) {
+        console.error('Error fetching therapist:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTherapist();
+  }, [therapistId]);
+
+  const sessionPrice = parseFloat(therapist?.price_per_session || '0');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="text-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto mb-4"></div>
+            <h3 className="text-lg font-medium text-foreground">Loading session details...</h3>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!therapist) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-purple-950/20 cyber-grid">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          <div className="text-center py-16">
+            <h3 className="text-lg font-medium text-foreground">Therapist not found</h3>
+            <Link href="/marketplace">
+              <Button variant="outline" className="mt-4">Back to Marketplace</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Mock wallet connection
   const connectWallet = async () => {
@@ -101,7 +150,7 @@ export default function PurchasePage({ params, searchParams }: PurchasePageProps
             <span>›</span>
             <Link href="/marketplace" className="hover:text-purple-400 transition-colors">Marketplace</Link>
             <span>›</span>
-            <Link href={`/therapist/${therapistId}`} className="hover:text-purple-400 transition-colors">{therapist.alias}</Link>
+            <Link href={`/therapist/${therapistId}`} className="hover:text-purple-400 transition-colors">{therapist.full_name}</Link>
             <span>›</span>
             <span className="text-foreground">Book Session</span>
           </div>
@@ -130,20 +179,17 @@ export default function PurchasePage({ params, searchParams }: PurchasePageProps
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
-                  <div 
-                    className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-400 to-blue-500 blur-sm opacity-70"
-                    style={{
-                      backgroundImage: `url(${createBlurredAvatar(therapist.id)})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }}
+                  <img
+                    src={`https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${therapist.id}`}
+                    alt={`${therapist.full_name} - Professional Therapist`}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-border"
                   />
                   <div>
-                    <h3 className="text-xl font-semibold text-foreground">{therapist.alias}</h3>
+                    <h3 className="text-xl font-semibold text-foreground">{therapist.full_name}</h3>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span>{therapist.profile.rating} rating</span>
-                      {therapist.profile.verified && (
+                      <span>{therapist.rating || 4.8} rating</span>
+                      {therapist.is_verified && (
                         <>
                           <span>•</span>
                           <Badge variant="verified" className="text-xs">

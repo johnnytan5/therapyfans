@@ -357,7 +357,7 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                 
                 <div className="text-center p-3 glass rounded-lg border border-purple-500/30 glow-purple">
                   <div className="text-lg font-bold text-purple-400">
-                    {formatSui(clientProfile.total_spent_sui || pastSessions.length * 5)}
+                    {formatSui(clientProfile.total_spent_sui || pastSessions.reduce((sum, session) => sum + parseFloat(session.price_sui?.toString() || '0'), 0))}
                   </div>
                   <div className="text-xs text-purple-300">Total Investment in Wellness</div>
                 </div>
@@ -432,9 +432,13 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                             <CardContent className="p-6">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full blur-sm opacity-70" />
+                                  <img
+                                    src={session.therapist_profile_picture || `https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${session.therapist_wallet}`}
+                                    alt={`${session.therapist_name} - Professional Therapist`}
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-border"
+                                  />
                                   <div>
-                                    <h3 className="font-semibold text-lg">Therapist</h3>
+                                    <h3 className="font-semibold text-lg">{session.therapist_name || 'Therapist'}</h3>
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                       <Calendar className="w-4 h-4" />
                                       {formatDate(session.date)} at {session.start_time}
@@ -508,9 +512,13 @@ export default function ClientProfilePage({ params }: ClientProfilePageProps) {
                         <CardContent className="p-6">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-blue-500 rounded-full blur-sm opacity-70" />
+                              <img
+                                src={session.therapist_profile_picture || `https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face&auto=format&q=80&seed=${session.therapist_wallet}`}
+                                alt={`${session.therapist_name} - Professional Therapist`}
+                                className="w-12 h-12 rounded-full object-cover border-2 border-border"
+                              />
                               <div>
-                                <h3 className="font-semibold text-lg">Therapist</h3>
+                                <h3 className="font-semibold text-lg">{session.therapist_name || 'Therapist'}</h3>
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                   <Calendar className="w-4 h-4" />
                                   {formatDate(session.date)} at {session.start_time}

@@ -39,6 +39,9 @@ export interface BookedSession {
   session_started_at: string | null;
   session_ended_at: string | null;
   updated_at: string;
+  // Therapist info (joined from therapists table)
+  therapist_name?: string;
+  therapist_profile_picture?: string | null;
 }
 
 // Frontend-compatible interface (matches existing SessionNFT)
@@ -315,23 +318,57 @@ export class SessionService {
   }
 
   /**
-   * Get booked sessions for a client
+   * Get booked sessions for a client with therapist information
    */
   static async getClientBookedSessions(clientWallet: string): Promise<BookedSession[]> {
     try {
-      const { data, error } = await supabase
+      // First, get the booked sessions
+      const { data: sessions, error: sessionsError } = await supabase
         .from('booked_sessions')
         .select('*')
         .eq('client_wallet', clientWallet)
         .order('date', { ascending: false })
         .order('start_time', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching client booked sessions:', error);
+      if (sessionsError) {
+        console.error('Error fetching client booked sessions:', sessionsError);
         return [];
       }
 
-      return data || [];
+      if (!sessions || sessions.length === 0) {
+        return [];
+      }
+
+      // Get unique therapist wallet addresses
+      const therapistWallets = [...new Set(sessions.map(s => s.therapist_wallet))];
+
+      // Fetch therapist information
+      const { data: therapists, error: therapistsError } = await supabase
+        .from('therapists')
+        .select('id, full_name, profile_picture_url')
+        .in('id', therapistWallets);
+
+      if (therapistsError) {
+        console.error('Error fetching therapist information:', therapistsError);
+        // Continue without therapist info
+      }
+
+      // Create a map of therapist wallet -> therapist info
+      const therapistMap = new Map();
+      if (therapists) {
+        therapists.forEach(therapist => {
+          therapistMap.set(therapist.id, therapist);
+        });
+      }
+
+      // Combine session data with therapist information
+      const transformedData = sessions.map(session => ({
+        ...session,
+        therapist_name: therapistMap.get(session.therapist_wallet)?.full_name || 'Unknown Therapist',
+        therapist_profile_picture: therapistMap.get(session.therapist_wallet)?.profile_picture_url || null,
+      }));
+
+      return transformedData;
     } catch (error) {
       console.error('Error in getClientBookedSessions:', error);
       return [];
