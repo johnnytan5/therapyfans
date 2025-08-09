@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 // Constants
-const PACKAGE_ID = "0x4d8b7cc84d041c2134bf8719b77162d39db06f9ca376ca5a27ef2ace6e084908";
+const PACKAGE_ID = "0xa6bcab787aa5ec915106c417531299c064c0acf028fee90a3ac72717421d0793";
 const NETWORK = "testnet";
 const EXPLORER_URL = "https://suiscan.xyz/testnet";
 
@@ -38,8 +38,8 @@ export default function SmartContractTest() {
   const account = useCurrentAccount();
 const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();  const suiClient = useSuiClient();
   // Add this with your other state variables
-const [useSpecificAddress, setUseSpecificAddress] = useState(true);
-const specificWalletAddress = "0x80bb0b336df5b007fbbd97cfdcba38c07d50f4fa29ee5565166ab89fa1414496";
+const [useSpecificAddress, setUseSpecificAddress] = useState(false);
+const specificWalletAddress = "0x40bd8248e692f15c0eff9e7cf79ca4f399964adc42c98ba44e38d5d23130106b";
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [transactions, setTransactions] = useState<string[]>([]);
   const [userKiosks, setUserKiosks] = useState<any[]>([]);
@@ -47,6 +47,15 @@ const specificWalletAddress = "0x80bb0b336df5b007fbbd97cfdcba38c07d50f4fa29ee556
   const [listedServices, setListedServices] = useState<any[]>([]);
   const [rentedServices, setRentedServices] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [refreshingKiosks, setRefreshingKiosks] = useState(false);
+  const [manualCapId, setManualCapId] = useState("");
+
+  // Pre-minted NFT listing form state
+  const [premintedNftId, setPremintedNftId] = useState<string>("");
+  const [kioskIdInput, setKioskIdInput] = useState<string>("");
+  const [kioskCapIdInput, setKioskCapIdInput] = useState<string>("");
+  const [listPriceSui, setListPriceSui] = useState<string>("1");
+  const [listTxDigest, setListTxDigest] = useState<string | null>(null);
 
   // NFT mint form state
   const [nftForm, setNftForm] = useState({
@@ -90,6 +99,18 @@ const specificWalletAddress = "0x80bb0b336df5b007fbbd97cfdcba38c07d50f4fa29ee556
     setLoading(prev => ({ ...prev, [operation]: false }));
   };
 
+  // Convert SUI (string, allows decimals) to MIST (u64 bigint)
+  const suiToMist = (sui: string): bigint => {
+    const trimmed = (sui || "").trim();
+    if (!trimmed) return BigInt(0);
+    const neg = trimmed.startsWith("-");
+    if (neg) throw new Error("Price must be positive");
+    const [wholeRaw, fracRaw = ""] = trimmed.split(".");
+    const whole = wholeRaw.replace(/[^0-9]/g, "") || "0";
+    const frac = (fracRaw.replace(/[^0-9]/g, "") + "000000000").slice(0, 9);
+    return BigInt(whole) * BigInt("1000000000") + BigInt(frac || "0");
+  };
+
 // Update your handleTxResult function to safely handle different response formats
 const handleTxResult = (result: any, operation: string) => {
   console.log(`${operation} result:`, result); // Add logging to see the actual structure
@@ -112,6 +133,10 @@ const handleTxResult = (result: any, operation: string) => {
       fetchListedServices();
       fetchRentedServices();
     }, 2000); // Small delay to allow indexing
+    // Extra refresh for slower indexers
+    setTimeout(() => {
+      fetchUserKiosks();
+    }, 6000);
   } else {
     // Extract error message using a more flexible approach
     const errorMessage = result?.effects?.status?.error || 
@@ -123,29 +148,36 @@ const handleTxResult = (result: any, operation: string) => {
   endLoading(operation);
 };
 
-// Create a new kiosk
+// Create a new kiosk via your package entry fun (handles share + cap transfer)
 const createKiosk = async () => {
   if (!account) return;
   startLoading("createKiosk");
-  
+
   try {
     const tx = new Transaction();
-    if (useSpecificAddress) {
-      tx.setSender(specificWalletAddress);
-    }
+    if (useSpecificAddress) tx.setSender(specificWalletAddress);
+
+    // Call your module's entry fun that internally: kiosk::new + share + transfer cap
     tx.moveCall({
       target: `${PACKAGE_ID}::nft_rental::new_kiosk`,
+      arguments: [],
     });
-    
+
     console.log("Executing create kiosk transaction...");
-    
-    const result = await signAndExecuteTransaction({
-      transaction: tx.serialize(),
-    });
-    
-    console.log("Create kiosk result:", result);
-    
-    handleTxResult(result, "Create Kiosk");
+
+    signAndExecuteTransaction(
+      { transaction: tx },
+      {
+        onSuccess: (result) => {
+          console.log("Create kiosk result:", result);
+          handleTxResult(result, "Create Kiosk");
+        },
+        onError: (e: any) => {
+          setError(`Error creating kiosk: ${e?.message || e}`);
+          endLoading("createKiosk");
+        },
+      },
+    );
   } catch (e: any) {
     console.error("Error creating kiosk:", e);
     setError(`Error creating kiosk: ${e.message}`);
@@ -178,6 +210,113 @@ const createKiosk = async () => {
     } catch (e: any) {
       setError(`Error installing extension: ${e.message}`);
       endLoading("installExtension");
+    }
+  };
+
+  // List a pre-minted NFT on a kiosk (standard kiosk: place + list)
+  const listNftForSaleOnKiosk = async () => {
+    if (!account) return;
+    startLoading("listNftForSale");
+    setListTxDigest(null);
+    try {
+      if (!premintedNftId || !kioskIdInput || !kioskCapIdInput) {
+        throw new Error("Provide NFT ID, Kiosk ID, and Kiosk OwnerCap ID");
+      }
+
+      // Resolve object type from chain to supply as the type argument for kiosk calls
+      const nftId = premintedNftId.trim();
+      const kioskId = kioskIdInput.trim();
+      const capId = kioskCapIdInput.trim();
+      const obj = await suiClient.getObject({
+        id: nftId,
+        options: { showType: true, showOwner: true, showContent: true },
+      } as any);
+
+      // On current RPC, showType puts the type at data.type (not data.content.type)
+      const nftType = (obj as any)?.data?.type || (obj as any)?.data?.content?.type;
+      if (!nftType || typeof nftType !== "string") {
+        throw new Error("Unable to resolve NFT type; ensure the object exists and you are the owner.");
+      }
+
+      // Ensure ownership
+      const ownerAddr = (obj as any)?.data?.owner?.AddressOwner as string | undefined;
+      if (!ownerAddr || ownerAddr.toLowerCase() !== account.address.toLowerCase()) {
+        throw new Error("You must own the NFT to place it into your kiosk.");
+      }
+
+      // Verify the OwnerCap actually belongs to the provided kiosk (common mismatch)
+      try {
+        const capObj = await suiClient.getObject({ id: capId, options: { showContent: true, showType: true } } as any);
+        const fields: any = (capObj as any)?.data?.content?.fields || {};
+        const capKioskId: string | undefined = (fields.kiosk || fields.kiosk_id || fields.for) as any;
+        if (capKioskId) {
+          if (capKioskId.toLowerCase() !== kioskId.toLowerCase()) {
+            throw new Error("The provided OwnerCap does not correspond to the provided Kiosk ID.");
+          }
+        } else {
+          console.warn("OwnerCap did not expose kiosk field; skipping pre-check.", {
+            capType: (capObj as any)?.data?.type,
+            fieldsKeys: Object.keys(fields || {}),
+          });
+        }
+      } catch (e: any) {
+        console.warn("Could not verify OwnerCap ↔ Kiosk pre-check; continuing to attempt listing.", e);
+      }
+
+      console.log("Listing debug:", { nftId, kioskId, capId, nftType });
+
+      const priceMist = suiToMist(listPriceSui);
+  if (priceMist <= BigInt(0)) throw new Error("Price must be greater than 0");
+
+      const tx = new Transaction();
+      // Set an explicit gas budget to avoid budget inference issues on some wallets/RPCs
+      try {
+        tx.setGasBudget(BigInt("50000000") as any);
+      } catch {
+        // Fallback for environments expecting number
+        // @ts-ignore
+        tx.setGasBudget(50_000_000);
+      }
+
+      // 1) Place the NFT into the kiosk
+      tx.moveCall({
+        target: `0x2::kiosk::place`,
+        typeArguments: [nftType],
+        arguments: [
+          tx.object(kioskId),
+          tx.object(capId),
+          tx.object(nftId),
+        ],
+      });
+
+      // 2) List the NFT for sale at the provided price
+      tx.moveCall({
+        target: `0x2::kiosk::list`,
+        typeArguments: [nftType],
+        arguments: [
+          tx.object(kioskId),
+          tx.object(capId),
+          tx.pure.id(nftId),
+          tx.pure.u64(priceMist),
+        ],
+      });
+
+      signAndExecuteTransaction(
+        { transaction: tx },
+        {
+          onSuccess: (result) => {
+            setListTxDigest((result as any)?.digest ?? null);
+            handleTxResult(result, "List NFT for Sale");
+          },
+          onError: (e: any) => {
+            setError(`Error listing NFT: ${e?.message || e}`);
+            endLoading("listNftForSale");
+          },
+        },
+      );
+    } catch (e: any) {
+      setError(e?.message || String(e));
+      endLoading("listNftForSale");
     }
   };
 
@@ -339,8 +478,8 @@ const mintTherapistNft = async () => {
       
       const tx = new Transaction();
       
-      // Create payment coin (5 SUI = 5,000,000,000 MIST)
-      const [coin] = tx.splitCoins(tx.gas, [tx.pure(5000000000)]);
+  // Create payment coin (5 SUI = 5,000,000,000 MIST)
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(5000000000)]);
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::rent_30_minutes`,
@@ -377,8 +516,8 @@ const mintTherapistNft = async () => {
       
       const tx = new Transaction();
       
-      // Create payment coin (10 SUI = 10,000,000,000 MIST)
-      const [coin] = tx.splitCoins(tx.gas, [tx.pure(10000000000)]);
+  // Create payment coin (10 SUI = 10,000,000,000 MIST)
+  const [coin] = tx.splitCoins(tx.gas, [tx.pure.u64(10000000000)]);
       
       tx.moveCall({
         target: `${PACKAGE_ID}::nft_rental::rent_1_hour`,
@@ -499,17 +638,144 @@ const mintTherapistNft = async () => {
   // Fetch user's kiosks
   const fetchUserKiosks = async () => {
     if (!account) return;
-    
     try {
-      // In a real application, you'd query the blockchain for the user's kiosks
-      // This is a mock implementation
-      const mockKiosks = [
-        { id: "0x123456", cap: "0xabcdef", hasExtension: true },
-        { id: "0x789012", cap: "0xghijkl", hasExtension: false }
-      ];
-      setUserKiosks(mockKiosks);
+      // Helper: fetch caps for a given StructType, and ensure we resolve fields.kiosk
+      const fetchCaps = async (structType: string) => {
+        const res = await suiClient.getOwnedObjects({
+          owner: account.address,
+          filter: { StructType: structType } as any,
+          options: { showType: true, showContent: true },
+        } as any);
+
+        const items = res?.data || [];
+
+        // Resolve kiosk field; if not present inline, fetch each object separately
+        const resolved = await Promise.all(
+          items.map(async (o: any) => {
+            const ownerCapId = o?.data?.objectId;
+            let kioskId = o?.data?.content?.fields?.kiosk;
+            if (!ownerCapId) return null;
+            if (!kioskId) {
+              try {
+                const obj = await suiClient.getObject({ id: ownerCapId, options: { showContent: true } } as any);
+                kioskId = (obj as any)?.data?.content?.fields?.kiosk;
+              } catch (e) {
+                console.warn("Failed to resolve kiosk for cap:", ownerCapId, e);
+              }
+            }
+            if (!kioskId) return null;
+            return { id: kioskId as string, cap: ownerCapId as string, hasExtension: false };
+          })
+        );
+
+        return resolved.filter(Boolean) as any[];
+      };
+
+      // Try both known type names to be safe across framework versions
+  const [capsNew, capsOld] = await Promise.all([
+        fetchCaps("0x2::kiosk::KioskOwnerCap"),
+        fetchCaps("0x2::kiosk::OwnerCap"),
+      ]);
+
+      let discovered = [...capsNew, ...capsOld];
+
+      // Fallback: some RPCs ignore StructType filter; do a paginated fetch then filter client-side
+      if (discovered.length === 0) {
+        console.log("Cap filter returned 0; falling back to paginated owned-objects fetch...");
+        let cursor: string | null | undefined = undefined;
+        const all: any[] = [];
+        let page = 0;
+        // Fetch up to 10 pages of 50 (Sui API max) to avoid infinite loops
+        while (page < 10) {
+          const resp = await suiClient.getOwnedObjects({
+            owner: account.address,
+            options: { showType: true },
+            cursor,
+            limit: 50,
+          } as any);
+          all.push(...(resp?.data || []));
+          cursor = (resp as any)?.nextCursor;
+          page += 1;
+          if (!cursor) break;
+        }
+        console.log("Owned objects total:", all.length);
+        const typeMatches = new Set([
+          "0x2::kiosk::KioskOwnerCap",
+          "0x2::kiosk::OwnerCap",
+        ]);
+        const caps = all.filter((o) => {
+          const t = (o as any)?.data?.type as string | undefined;
+          if (!t) return false;
+          return (
+            typeMatches.has(t) ||
+            t.endsWith("::kiosk::KioskOwnerCap") ||
+            t.endsWith("::kiosk::OwnerCap")
+          );
+        });
+        console.log("Filtered caps (fallback):", caps.length);
+
+        // Resolve kiosk ids
+        discovered = (
+          await Promise.all(
+            caps.map(async (o: any) => {
+              const capId = o?.data?.objectId;
+              if (!capId) return null;
+              try {
+                const obj = await suiClient.getObject({ id: capId, options: { showContent: true } } as any);
+                const kioskId = (obj as any)?.data?.content?.fields?.kiosk;
+                if (!kioskId) return null;
+                return { id: kioskId as string, cap: capId as string, hasExtension: false };
+              } catch (e) {
+                return null;
+              }
+            })
+          )
+        ).filter(Boolean) as any[];
+      }
+
+      const byKiosk = new Map<string, any>();
+      discovered.forEach((k) => {
+        if (!byKiosk.has(k.id)) byKiosk.set(k.id, k);
+      });
+
+      const kiosks = Array.from(byKiosk.values());
+      console.log("Discovered kiosks:", kiosks);
+      setUserKiosks(kiosks);
     } catch (error) {
       console.error("Error fetching user kiosks:", error);
+    }
+  };
+
+  const refreshKiosks = async () => {
+    if (!account) return;
+    try {
+      setRefreshingKiosks(true);
+      await fetchUserKiosks();
+    } finally {
+      setRefreshingKiosks(false);
+    }
+  };
+
+  const addKioskByOwnerCap = async () => {
+    if (!account) return;
+    const capId = manualCapId.trim();
+    if (!capId) return;
+    try {
+      const obj = await suiClient.getObject({ id: capId, options: { showContent: true } } as any);
+      const kioskId = (obj as any)?.data?.content?.fields?.kiosk;
+      if (!kioskId) {
+        setError("Could not resolve kiosk from OwnerCap. Check the ID and network.");
+        return;
+      }
+      setUserKiosks((prev) => {
+        if (prev.some((k) => k.id === kioskId)) return prev;
+        const next = [...prev, { id: kioskId as string, cap: capId, hasExtension: false }];
+        console.log("Manually added kiosk:", next);
+        return next;
+      });
+      setManualCapId("");
+    } catch (e: any) {
+      setError(e?.message || String(e));
     }
   };
 
@@ -659,9 +925,26 @@ const mintTherapistNft = async () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="border-0 glass border-glow hover:glow-purple">
                 <CardHeader>
-                  <CardTitle>Kiosk Management</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>Kiosk Management</span>
+                    <Button size="sm" variant="outline" onClick={refreshKiosks} disabled={refreshingKiosks}>
+                      {refreshingKiosks ? (
+                        <Clock className="w-3 h-3 mr-1 animate-spin" />
+                      ) : null}
+                      Refresh
+                    </Button>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Paste OwnerCap ID (0x...)"
+                      className="font-mono"
+                      value={manualCapId}
+                      onChange={(e) => setManualCapId(e.target.value)}
+                    />
+                    <Button variant="outline" onClick={addKioskByOwnerCap}>Add by OwnerCap</Button>
+                  </div>
                   <Button 
                     onClick={createKiosk} 
                     disabled={loading.createKiosk}
@@ -688,9 +971,14 @@ const mintTherapistNft = async () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center">
-                              <Badge variant="outline" className="font-mono">
-                                {formatAddress(kiosk.id)}
-                              </Badge>
+                              <div className="flex flex-col">
+                                <Badge variant="outline" className="font-mono w-fit">
+                                  {formatAddress(kiosk.id)}
+                                </Badge>
+                                {kiosk.cap && (
+                                  <span className="mt-1 text-xs text-muted-foreground font-mono break-all">Cap: {formatAddress(kiosk.cap)}</span>
+                                )}
+                              </div>
                               {kiosk.hasExtension && (
                                 <Badge variant="secondary" className="ml-2">
                                   Rental Extension
@@ -718,6 +1006,107 @@ const mintTherapistNft = async () => {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* List Pre-minted NFT on Kiosk */}
+              <Card className="border-0 glass border-glow hover:glow-orange">
+                <CardHeader>
+                  <CardTitle>List Pre-minted NFT on Kiosk</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">NFT Object ID</label>
+                    <Input
+                      value={premintedNftId}
+                      onChange={(e) => setPremintedNftId(e.target.value)}
+                      placeholder="0x... (your NFT object ID)"
+                      className="mb-2 font-mono"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Kiosk ID</label>
+                      <Input
+                        value={kioskIdInput}
+                        onChange={(e) => setKioskIdInput(e.target.value)}
+                        placeholder="0x... kiosk object ID"
+                        className="font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">Kiosk OwnerCap ID</label>
+                      <Input
+                        value={kioskCapIdInput}
+                        onChange={(e) => setKioskCapIdInput(e.target.value)}
+                        placeholder="0x... kiosk owner cap ID"
+                        className="font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {selectedKiosk && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const kiosk = userKiosks.find((k) => k.id === selectedKiosk);
+                          if (kiosk) {
+                            setKioskIdInput(kiosk.id);
+                            setKioskCapIdInput(kiosk.cap);
+                          }
+                        }}
+                      >
+                        Use Selected Kiosk
+                      </Button>
+                      <Badge variant="outline" className="font-mono">{formatAddress(selectedKiosk)}</Badge>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Listing Price (SUI)</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={listPriceSui}
+                        type="text"
+                        onChange={(e) => setListPriceSui(e.target.value)}
+                        placeholder="e.g. 1.5"
+                        className="w-full"
+                      />
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <DollarSign className="w-3 h-3" /> SUI
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={listNftForSaleOnKiosk}
+                    disabled={loading.listNftForSale}
+                    className="w-full"
+                  >
+                    {loading.listNftForSale ? (
+                      <Clock className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <List className="w-4 h-4 mr-2" />
+                    )}
+                    Place & List NFT for Sale
+                  </Button>
+
+                  {listTxDigest && (
+                    <div className="text-sm mt-2">
+                      <a
+                        href={getTxLink(listTxDigest)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:underline flex items-center"
+                      >
+                        View listing tx on SuiScan
+                        <ExternalLink className="w-3 h-3 ml-1" />
+                      </a>
                     </div>
                   )}
                 </CardContent>
