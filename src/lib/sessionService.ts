@@ -108,6 +108,7 @@ export class SessionService {
         date: session.date,
         start_time: session.start_time,
         end_time: session.end_time,
+        duration_minutes: session.duration_minutes,
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
@@ -156,6 +157,7 @@ export class SessionService {
         date: session.date,
         start_time: session.start_time,
         end_time: session.end_time,
+        duration_minutes: session.duration_minutes,
         price_sui: session.price_sui,
         status: session.status as 'available' | 'booked' | 'completed',
         meeting_room_id: session.meeting_room_id,
@@ -330,6 +332,7 @@ export class SessionService {
         date: availableSession.date,
         start_time: availableSession.start_time,
         end_time: availableSession.end_time,
+        duration_minutes: availableSession.duration_minutes,
         price_sui: availableSession.price_sui,
         status: 'booked',
         nft_token_id: nftTokenId,
@@ -371,11 +374,11 @@ export class SessionService {
       // Get unique therapist wallet addresses
       const therapistWallets = [...new Set(sessions.map(s => s.therapist_wallet))];
 
-      // Fetch therapist information
+      // Fetch therapist information by wallet_address to avoid UUID casting errors
       const { data: therapists, error: therapistsError } = await supabase
         .from('therapists')
-        .select('id, full_name, profile_picture_url')
-        .in('id', therapistWallets);
+        .select('wallet_address, full_name, profile_picture_url')
+        .in('wallet_address', therapistWallets);
 
       if (therapistsError) {
         console.error('Error fetching therapist information:', therapistsError);
@@ -386,7 +389,7 @@ export class SessionService {
       const therapistMap = new Map();
       if (therapists) {
         therapists.forEach(therapist => {
-          therapistMap.set(therapist.id, therapist);
+          therapistMap.set(therapist.wallet_address, therapist);
         });
       }
 
