@@ -31,9 +31,7 @@
 // // Import centralized configuration
 // import { PACKAGE_ID, NETWORK, CONTRACT_FUNCTIONS, SUI_TYPES, getCurrentNetworkConfig } from '@/lib/suiConfig';
 
-// // Constants
-// const PACKAGE_ID = "0x7dee12dcb0e9afc507ef32e7741f18009f30ffbabe9fabdf53c2a4331793a76e";
-// const NETWORK = "testnet";
+
 // // const EXPLORER_URL = "https://suiscan.xyz/testnet";
 // const EXPLORER_URL = getCurrentNetworkConfig().explorerUrl;
 
