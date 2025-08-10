@@ -1,4 +1,4 @@
-# Therapy Fans 🧠💜
+# TherapyFans 🧠💜
 
 **Anonymous Therapy, Verified Trust**
 
