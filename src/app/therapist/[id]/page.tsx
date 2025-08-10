@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { Shield, Clock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import ProfileNFTCard from '@/components/therapy/ProfileNFTCard';
+import useTherapistNFT from '@/hooks/useTherapistNFT';
 import Link from 'next/link';
 
 interface TherapistProfilePageProps {
@@ -22,6 +24,10 @@ export default function TherapistProfilePage({ params }: TherapistProfilePagePro
   const [specializations, setSpecializations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Always call hooks in a stable order: compute wallet and call NFT hook unconditionally
+  const therapistWallet: string | null = therapist?.wallet_address ?? null;
+  const { data: nft, loading: nftLoading, error: nftError } = useTherapistNFT(therapistWallet);
 
   useEffect(() => {
     async function fetchTherapistData() {
@@ -162,7 +168,7 @@ export default function TherapistProfilePage({ params }: TherapistProfilePagePro
             </CardContent>
           </Card>
 
-          {/* Details */}
+          {/* Details + NFT */}
           <div className="grid md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -244,9 +250,39 @@ export default function TherapistProfilePage({ params }: TherapistProfilePagePro
             </Card>
           </div>
 
-
-
-
+          {/* Therapist NFT Hexagon */}
+          <div className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Therapist NFT</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {nftLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading NFT...</div>
+                ) : nftError ? (
+                  <div className="text-sm text-red-500">{nftError}</div>
+                ) : nft ? (
+                  <div className="flex justify-center">
+                    <ProfileNFTCard
+                      imageUrl={nft.imageUrl}
+                      title={nft.name}
+                      priceMist={nft.priceMist ?? null}
+                      subtitle={nft.description}
+                      placeholder={false}
+                      metadata={nft.metadata}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex justify-center">
+                    <ProfileNFTCard
+                      title="No NFT found"
+                      placeholder
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
